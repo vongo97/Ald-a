@@ -24,8 +24,6 @@ export default function SettingsView() {
   const [notifStatus, setNotifStatus] = useState(notificationsSupported() ? notifPermission() : "unsupported");
   
   // Auth states
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const session = useStore((s) => s.session);
   const loadSession = useStore((s) => s.loadSession);
@@ -431,70 +429,11 @@ export default function SettingsView() {
           ) : (
             <div className="rounded-lg bg-slate-900/50 p-3">
               <p className="text-xs text-slate-400 mb-3">
-                Inicia sesión para respaldar tus tareas automáticamente y compartirlas entre tus dispositivos.
+                Conecta con Google para respaldar tus tareas automáticamente y compartirlas entre tus dispositivos.
               </p>
               <div className="flex flex-col gap-2">
-                <input
-                  className="input text-sm"
-                  type="email"
-                  placeholder="Tu correo"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                <input
-                  className="input text-sm"
-                  type="password"
-                  placeholder="Contraseña (mín 6 caract.)"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <div className="flex gap-2 mt-1">
-                  <button
-                    type="button"
-                    className="btn-primary text-xs flex-1"
-                    disabled={authLoading || !email || !password}
-                    onClick={async () => {
-                      setAuthLoading(true);
-                      const { supabase } = await import("@/store/supabase");
-                      const { error } = await supabase.auth.signInWithPassword({ email, password });
-                      if (error) pushToast(`Error: ${error.message}`);
-                      else {
-                        pushToast("Sesión iniciada. Sincronizando...");
-                        await loadSession();
-                        // El pull ahora lo dispara <App> al conocer la sesión,
-                        // así que evitamos descargar dos veces.
-                      }
-                      setAuthLoading(false);
-                    }}
-                  >
-                    {authLoading ? "Cargando..." : "Iniciar Sesión"}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-ghost text-xs flex-1 text-sky-400"
-                    disabled={authLoading || !email || !password}
-                    onClick={async () => {
-                      setAuthLoading(true);
-                      const { supabase } = await import("@/store/supabase");
-                      const { error } = await supabase.auth.signUp({ email, password });
-                      if (error) pushToast(`Error: ${error.message}`);
-                      else {
-                        pushToast("Cuenta creada exitosamente. Revisa tu correo o inicia sesión.");
-                        await loadSession();
-                      }
-                      setAuthLoading(false);
-                    }}
-                  >
-                    Registrarse
-                  </button>
-                </div>
-
-                <div className="mt-3 flex items-center gap-2">
-                  <hr className="flex-1 border-slate-700" />
-                  <span className="text-[10px] text-slate-500 uppercase tracking-wider">O también</span>
-                  <hr className="flex-1 border-slate-700" />
-                </div>
-
+                {/* Solo OAuth con Google: sin registro por correo no hay
+                    contraseñas que guardar ni rate limits de Supabase. */}
                 <button
                   type="button"
                   className="btn-ghost mt-2 flex items-center justify-center gap-2 border border-slate-700/50 hover:bg-slate-800"
