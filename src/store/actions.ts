@@ -3,7 +3,7 @@ import type { ParsedCapture } from "@/parsers/capture";
 import type { Priority, Project, Task } from "@/domain/types";
 import { nextOccurrence } from "@/domain/recurrence";
 import { toISODate, parseISODate } from "@/domain/dateutils";
-import { autoPushTask, autoDeleteTask, autoPushProject, autoDeleteProject } from "./sync";
+import { autoPushTask, autoDeleteTask, autoPushProject, autoDeleteProject, autoPushTasks } from "./sync";
 
 export async function createProject(name: string, color: string): Promise<Project> {
   const p: Project = { id: newId(), name, color };
@@ -19,12 +19,22 @@ export async function updateProject(id: string, changes: Partial<Project>): Prom
 }
 
 export async function deleteProject(id: string): Promise<void> {
+  // Recojo los ids ANTES de desengancharlos para poder re-lerlos y subirlos.
+  const affectedIds = (await db.tasks.where("projectId").equals(id).toArray()).map((t) => t.id);
+
   await db.transaction("rw", db.tasks, db.projects, async () => {
     await db.tasks.where("projectId").equals(id).modify({ projectId: undefined });
     await db.projects.delete(id);
   });
+
+  // La nube también se entera: el proyecto desaparece y sus tareas quedan huérfanas.
   void autoDeleteProject(id);
-  // Nota: Deberíamos actualizar las tareas afectadas en Supabase también, pero por simplicidad de la prueba, no lo haremos aquí.
+  const detached: Task[] = [];
+  for (const taskId of affectedIds) {
+    const fresh = await db.tasks.get(taskId);
+    if (fresh) detached.push(fresh);
+  }
+  void autoPushTasks(detached);
 }
 
 export async function createTaskFromCapture(
@@ -128,6 +138,13 @@ export async function reorderTasks(orderedIds: string[]): Promise<void> {
       await db.tasks.update(orderedIds[i], { order: i });
     }
   });
+  // El orden vive en `order`, así que hay que subirlo: antes se quedaba solo en local.
+  const moved: Task[] = [];
+  for (const id of orderedIds) {
+    const fresh = await db.tasks.get(id);
+    if (fresh) moved.push(fresh);
+  }
+  void autoPushTasks(moved);
 }
 
 export async function applyReprogramming(
@@ -138,6 +155,13 @@ export async function applyReprogramming(
       await db.tasks.update(p.taskId, { dueDate: p.toDate });
     }
   });
+  // Reprogramar es un cambio de fecha: antes no llegaba nunca a la nube.
+  const moved: Task[] = [];
+  for (const p of proposals) {
+    const fresh = await db.tasks.get(p.taskId);
+    if (fresh) moved.push(fresh);
+  }
+  void autoPushTasks(moved);
 }
 
 function randomColor(): string {

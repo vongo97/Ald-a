@@ -4,3 +4,8 @@ dev-dist
 coverage
 *.local
 .DS_Store
+
+# Credenciales de entorno — nunca al repositorio
+.env
+.env.*
+!.env.example

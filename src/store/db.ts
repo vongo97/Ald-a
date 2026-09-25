@@ -17,6 +17,34 @@ export class TareasDB extends Dexie {
 
 export const db = new TareasDB();
 
+/**
+ * Sella `updatedAt` en TODA escritura, sin que cada punto de llamada tenga
+ * que acordárselo (esto cubre también los `put()` directos de BreakdownButton).
+ *
+ * Regla clave: solo sella si quien escribe no trae ya su propio `updatedAt`.
+ * Así `pullAndSyncFromSupabase` conserva el timestamp real de la nube en vez
+ * de pisarlo con "ahora", y la importación de un backup respeta sus fechas.
+ */
+const stampNow = (): string => new Date().toISOString();
+
+db.tasks.hook("creating", (_primKey, obj) => {
+  const target = obj as unknown as Task;
+  if (!target.updatedAt) target.updatedAt = stampNow();
+});
+db.tasks.hook("updating", (modifications) => {
+  const mods = modifications as unknown as Partial<Task>;
+  if (!("updatedAt" in mods)) mods.updatedAt = stampNow();
+});
+
+db.projects.hook("creating", (_primKey, obj) => {
+  const target = obj as unknown as Project;
+  if (!target.updatedAt) target.updatedAt = stampNow();
+});
+db.projects.hook("updating", (modifications) => {
+  const mods = modifications as unknown as Partial<Project>;
+  if (!("updatedAt" in mods)) mods.updatedAt = stampNow();
+});
+
 const uid = (): string =>
   crypto.randomUUID?.() ?? `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 

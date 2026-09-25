@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/store/useStore";
 import { SettingsProvider } from "@/store/SettingsContext";
 import Nav from "@/components/Nav";
@@ -28,12 +28,24 @@ function AppInner() {
   const view = useStore((s) => s.view);
   const openCapture = useStore((s) => s.openCapture);
   const loadSession = useStore((s) => s.loadSession);
+  const session = useStore((s) => s.session);
   const [showNotifBanner, setShowNotifBanner] = useState(false);
+  const pulledFor = useRef<string | null>(null);
 
   // Cargar sesión inicial de Supabase
   useEffect(() => {
     void loadSession();
   }, [loadSession]);
+
+  // Al conocer la sesión (login por contraseña, OAuth con Google o recarga),
+  // sincroniza una sola vez. Antes esto solo ocurría en el login por contraseña,
+  // así que Google dejaba los datos sin bajar.
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId || pulledFor.current === userId) return;
+    pulledFor.current = userId;
+    void import("@/store/sync").then((m) => m.pullAndSyncFromSupabase());
+  }, [session]);
 
   // Tareas pendientes de hoy para el badge
   const today = toISODate(startOfDay(new Date()));

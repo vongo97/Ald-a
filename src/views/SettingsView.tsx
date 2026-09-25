@@ -461,8 +461,8 @@ export default function SettingsView() {
                       else {
                         pushToast("Sesión iniciada. Sincronizando...");
                         await loadSession();
-                        const { pullAndSyncFromSupabase } = await import("@/store/sync");
-                        await pullAndSyncFromSupabase();
+                        // El pull ahora lo dispara <App> al conocer la sesión,
+                        // así que evitamos descargar dos veces.
                       }
                       setAuthLoading(false);
                     }}

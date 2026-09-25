@@ -26,12 +26,16 @@ export interface Task {
   createdAt: string; // ISO datetime
   completedAt?: string;
   timeBlock?: { start: string; end: string }; // time-blocking ("HH:mm")
+  /** Última modificación (ISO). Es la base del merge de sincronización. */
+  updatedAt?: string;
 }
 
 export interface Project {
   id: string;
   name: string;
   color: string;
+  /** Última modificación (ISO). Es la base del merge de sincronización. */
+  updatedAt?: string;
 }
 
 export interface Settings {
