@@ -4,6 +4,7 @@ import type { Priority, Project, Task } from "@/domain/types";
 import { nextOccurrence } from "@/domain/recurrence";
 import { toISODate, parseISODate } from "@/domain/dateutils";
 import { autoPushTask, autoDeleteTask, autoPushProject, autoDeleteProject, autoPushTasks } from "./sync";
+import { randomColor } from "@/domain/color";
 
 export async function createProject(name: string, color: string): Promise<Project> {
   const p: Project = { id: newId(), name, color };
@@ -132,6 +133,36 @@ export async function addSubtask(parent: Task, title: string): Promise<Task> {
   return t;
 }
 
+/**
+ * Crea varias subtareas de golpe y las sube a la nube en UNA sola llamada.
+ *
+ * Antes `BreakdownButton` hacía `db.tasks.put()` directo: las subtareas se
+ * quedaban en local y nunca llegaban a Supabase. (El hook de Dexie sí les
+ * sellaba `updatedAt`, pero nada las empujaba.)
+ */
+export async function addSubtasks(
+  parent: Task,
+  items: { title: string; durationMin?: number }[],
+): Promise<Task[]> {
+  const base = await db.tasks.where("parentId").equals(parent.id).count();
+  const created: Task[] = items.map((s, i) => ({
+    id: newId(),
+    title: s.title,
+    labels: [],
+    priority: parent.priority,
+    importance: parent.importance,
+    status: "todo",
+    parentId: parent.id,
+    // Al final y sin empates: el `order: 999` fijo repetía el valor en cada desglose.
+    order: base + i,
+    createdAt: new Date().toISOString(),
+    ...(s.durationMin ? { durationMin: s.durationMin } : {}),
+  }));
+  await db.tasks.bulkPut(created);
+  void autoPushTasks(created);
+  return created;
+}
+
 export async function reorderTasks(orderedIds: string[]): Promise<void> {
   await db.transaction("rw", db.tasks, async () => {
     for (let i = 0; i < orderedIds.length; i++) {
@@ -162,9 +193,4 @@ export async function applyReprogramming(
     if (fresh) moved.push(fresh);
   }
   void autoPushTasks(moved);
-}
-
-function randomColor(): string {
-  const palette = ["#38bdf8", "#f472b6", "#a3e635", "#fbbf24", "#c084fc", "#34d399", "#fb7185"];
-  return palette[Math.floor(Math.random() * palette.length)];
 }

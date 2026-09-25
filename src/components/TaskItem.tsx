@@ -10,7 +10,7 @@ import type { Task } from "@/domain/types";
 import BreakdownButton from "./BreakdownButton";
 
 export default function TaskItem({ task, showScore = false }: { task: Task; showScore?: boolean }) {
-  const pushToast = useStoreToast();
+  const pushToast = useStore((s) => s.pushToast);
   const [expanded, setExpanded] = useState(false);
   const [subtaskText, setSubtaskText] = useState("");
   const [editing, setEditing] = useState(false);
@@ -240,8 +240,4 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
       </div>
     </div>
   );
-}
-
-function useStoreToast() {
-  return useStore((s) => s.pushToast);
 }

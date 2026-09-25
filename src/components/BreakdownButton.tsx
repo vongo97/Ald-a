@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { db, newId } from "@/store/db";
+import { addSubtasks } from "@/store/actions";
 import { useStore } from "@/store/useStore";
 import { useSettings } from "@/store/SettingsContext";
 import { breakdownTask, type SubtaskSuggestion } from "@/llm/tasks";
@@ -43,20 +43,8 @@ export default function BreakdownButton({ task }: { task: Task }) {
   };
 
   const handleConfirm = async (selected: { title: string; durationMin?: number }[]) => {
-    for (const s of selected) {
-      await db.tasks.put({
-        id: newId(),
-        title: s.title,
-        labels: [],
-        priority: task.priority,
-        importance: task.importance,
-        status: "todo",
-        parentId: task.id,
-        order: 999, // al final; reordenable
-        createdAt: new Date().toISOString(),
-        ...(s.durationMin ? { durationMin: s.durationMin } : {}),
-      });
-    }
+    // Por la acción y no por un put() directo: así las subtareas suben a la nube.
+    await addSubtasks(task, selected);
     pushToast(`${selected.length} subtareas creadas`);
   };
 

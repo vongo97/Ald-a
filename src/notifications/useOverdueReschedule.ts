@@ -1,45 +1,63 @@
 import { useEffect, useState } from "react";
-import { db } from "@/store/db";
 import { toISODate, startOfDay } from "@/domain/dateutils";
-import { updateTask } from "@/store/actions";
-import type { Task } from "@/domain/types";
+import { applyReprogramming } from "@/store/actions";
+import { useOverdue } from "@/store/useOverdue";
 
-interface OverdueModalState {
-  open: boolean;
-  tasks: Task[];
+/** "Ya te lo dije hoy": hace que "Ignorar" sobreviva a una recarga. */
+const DISMISS_KEY = "ald-a:overdue-dismissed";
+
+function readDismissed(): string | null {
+  try {
+    return sessionStorage.getItem(DISMISS_KEY);
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Hook que detecta tareas atrasadas (dueDate < hoy, status: "todo")
- * y expone el estado del modal + acciones para moverlas a hoy.
+ * Estado del modal de vencidas.
+ *
+ * Se abre solo pasados 1,2 s (para que la app dé tiempo a cargar) y "Ignorar"
+ * deja de molestar durante el resto del día: antes el estado vivía solo en
+ * memoria, así que **cada recarga volvía a enseñarlo**.
+ *
+ * Al aplicar cualquier acción el modal se cierra solo, porque `overdue` deja
+ * de estar vacío… y si queda algo sin reprogramar, lo sigue enseñando el
+ * banner de Hoy en lugar de bloquear la pantalla.
  */
 export function useOverdueReschedule() {
-  const [state, setState] = useState<OverdueModalState>({ open: false, tasks: [] });
+  const { overdue, proposals, applySuggestions } = useOverdue();
+  const [armed, setArmed] = useState(false);
+  const [dismissedOn, setDismissedOn] = useState<string | null>(readDismissed);
 
   useEffect(() => {
-    const today = toISODate(startOfDay(new Date()));
-
-    void (async () => {
-      const all = await db.tasks.toArray();
-      const overdue = all.filter(
-        (t) => t.status === "todo" && t.dueDate && t.dueDate < today,
-      );
-      if (overdue.length > 0) {
-        // Pequeño delay para que la app cargue primero
-        setTimeout(() => setState({ open: true, tasks: overdue }), 1200);
-      }
-    })();
+    const t = setTimeout(() => setArmed(true), 1200);
+    return () => clearTimeout(t);
   }, []);
 
-  const moveAllToday = async () => {
-    const today = toISODate(startOfDay(new Date()));
-    for (const task of state.tasks) {
-      await updateTask(task.id, { dueDate: today });
+  const today = toISODate(startOfDay(new Date()));
+  const open = armed && overdue.length > 0 && dismissedOn !== today;
+
+  const dismiss = (): void => {
+    try {
+      sessionStorage.setItem(DISMISS_KEY, today);
+    } catch {
+      // Sin sessionStorage seguimos funcionando, solo que volverá a salir.
     }
-    setState({ open: false, tasks: [] });
+    setDismissedOn(today);
   };
 
-  const dismiss = () => setState({ open: false, tasks: [] });
+  /** La sugerencia que respeta tu capacidad. */
+  const applySmart = async (): Promise<void> => {
+    await applySuggestions();
+    dismiss();
+  };
 
-  return { ...state, moveAllToday, dismiss };
+  /** Todo a hoy sin mirar capacidad (lo que hacía el modal antes). */
+  const moveAllToday = async (): Promise<void> => {
+    await applyReprogramming(overdue.map((t) => ({ taskId: t.id, toDate: today })));
+    dismiss();
+  };
+
+  return { open, overdue, proposals, applySmart, moveAllToday, dismiss };
 }

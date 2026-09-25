@@ -6,6 +6,7 @@ import TaskItem from "@/components/TaskItem";
 import { useStore } from "@/store/useStore";
 import { EmptyState } from "./TodayView";
 import { sortBySuggested } from "@/domain/priority";
+import { randomColor } from "@/domain/color";
 import type { Task } from "@/domain/types";
 
 export default function ProjectsView() {
@@ -144,9 +145,4 @@ export default function ProjectsView() {
       )}
     </section>
   );
-}
-
-function randomColor(): string {
-  const palette = ["#38bdf8", "#f472b6", "#a3e635", "#fbbf24", "#c084fc", "#34d399", "#fb7185"];
-  return palette[Math.floor(Math.random() * palette.length)];
 }

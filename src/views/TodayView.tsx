@@ -3,8 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/store/db";
 import { sortBySuggested } from "@/domain/priority";
 import { dayCapacity, formatMinutes } from "@/domain/capacity";
-import { overdueTasks, proposeReprogramming } from "@/domain/deviation";
-import { applyReprogramming } from "@/store/actions";
+import { useOverdue } from "@/store/useOverdue";
 import { useStore } from "@/store/useStore";
 import SortableTaskList from "@/components/SortableTaskList";
 import { toISODate, startOfDay } from "@/domain/dateutils";
@@ -24,8 +23,8 @@ export default function TodayView() {
   }, [allTasks, today]);
 
   const capacity = useMemo(() => dayCapacity(allTasks ?? [], today), [allTasks, today]);
-  const overdue = useMemo(() => overdueTasks(allTasks ?? []), [allTasks]);
-  const proposals = useMemo(() => proposeReprogramming(allTasks ?? []), [allTasks]);
+  // La misma fuente que usa el modal: una sola definición de "vencida".
+  const { overdue, proposals, applySuggestions } = useOverdue();
 
   if (!allTasks || !projects) return null;
 
@@ -47,8 +46,9 @@ export default function TodayView() {
           <button
             type="button"
             className="btn-primary mt-2 text-xs"
+            disabled={proposals.length === 0}
             onClick={() => {
-              void applyReprogramming(proposals).then(() =>
+              void applySuggestions().then(() =>
                 pushToast(`${proposals.length} tareas reprogramadas`),
               );
             }}

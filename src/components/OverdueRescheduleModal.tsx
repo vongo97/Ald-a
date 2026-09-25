@@ -1,9 +1,10 @@
 import { useOverdueReschedule } from "@/notifications/useOverdueReschedule";
 
 export default function OverdueRescheduleModal() {
-  const { open, tasks, moveAllToday, dismiss } = useOverdueReschedule();
+  const { open, overdue, proposals, applySmart, moveAllToday, dismiss } =
+    useOverdueReschedule();
 
-  if (!open || tasks.length === 0) return null;
+  if (!open || overdue.length === 0) return null;
 
   return (
     <div
@@ -18,20 +19,20 @@ export default function OverdueRescheduleModal() {
         <div className="mb-1 flex items-center gap-2">
           <span className="text-2xl">📅</span>
           <h2 className="text-base font-semibold text-slate-100">
-            {tasks.length === 1
+            {overdue.length === 1
               ? "1 tarea quedó pendiente"
-              : `${tasks.length} tareas quedaron pendientes`}
+              : `${overdue.length} tareas quedaron pendientes`}
           </h2>
         </div>
         <p className="mb-4 text-xs text-slate-400">
-          {tasks.length === 1
-            ? "Esta tarea tenía fecha anterior a hoy. ¿La movemos a hoy?"
-            : "Estas tareas tenían fecha anterior a hoy. ¿Las movemos a hoy?"}
+          {overdue.length === 1
+            ? "Esta tarea tenía fecha anterior a hoy. ¿La movemos?"
+            : "Estas tareas tenían fecha anterior a hoy. ¿Las movemos?"}
         </p>
 
-        {/* Lista de tareas (máx. 4 visibles) */}
+        {/* Lista de tareas (máx. 8 visibles) */}
         <ul className="mb-4 max-h-36 space-y-1 overflow-y-auto">
-          {tasks.slice(0, 8).map((t) => (
+          {overdue.slice(0, 8).map((t) => (
             <li
               key={t.id}
               className="flex items-center gap-2 rounded-lg bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300"
@@ -43,25 +44,34 @@ export default function OverdueRescheduleModal() {
               )}
             </li>
           ))}
-          {tasks.length > 8 && (
+          {overdue.length > 8 && (
             <li className="px-3 py-1 text-xs text-slate-500">
-              …y {tasks.length - 8} más
+              …y {overdue.length - 8} más
             </li>
           )}
         </ul>
 
-        {/* Acciones */}
+        {/* Acciones: misma lógica que el banner de Hoy */}
         <div className="flex flex-wrap gap-2">
+          {proposals.length > 0 && (
+            <button
+              type="button"
+              className="btn-primary flex-1"
+              onClick={() => void applySmart()}
+            >
+              Reprogramar {proposals.length} con hueco
+            </button>
+          )}
           <button
             type="button"
-            className="btn-primary flex-1"
+            className="btn-ghost flex-1 text-slate-300"
             onClick={() => void moveAllToday()}
           >
             Mover todas a hoy
           </button>
           <button
             type="button"
-            className="btn-ghost flex-1 text-slate-400"
+            className="btn-ghost w-full text-slate-400"
             onClick={dismiss}
           >
             Ignorar
