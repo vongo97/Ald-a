@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { SubtaskSuggestion } from "@/llm/tasks";
+import { useDialogA11y } from "@/hooks/useDialogA11y";
 
 interface BreakdownModalProps {
   taskTitle: string;
@@ -25,6 +26,8 @@ export default function BreakdownModal({
     })),
   );
   const [saving, setSaving] = useState(false);
+  // Este modal no tenía Escape en absoluto (solo click fuera del velo).
+  const dialogRef = useDialogA11y<HTMLDivElement>(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -68,7 +71,13 @@ export default function BreakdownModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="card w-full max-w-lg p-5 shadow-2xl" role="dialog" aria-label="Revisar desglose de tarea">
+      <div
+        ref={dialogRef}
+        className="card w-full max-w-lg p-5 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Revisar desglose de tarea"
+      >
         <header className="mb-4">
           <h2 className="text-base font-bold text-slate-100 light:text-slate-900">Desglose sugerido</h2>
           <p className="mt-0.5 text-xs text-slate-400 light:text-slate-500">

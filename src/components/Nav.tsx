@@ -24,6 +24,9 @@ export default function Nav() {
           key={it.id}
           type="button"
           onClick={() => setView(it.id)}
+          // La vista activa se indica por color; sin esto un lector de
+          // pantalla no puede saber en qué sección estás.
+          aria-current={view === it.id ? "page" : undefined}
           className={`rounded-lg px-2.5 py-1 transition-colors ${
             view === it.id
               ? "bg-sky-500/15 light:bg-sky-50 font-semibold text-sky-300 light:text-sky-600"

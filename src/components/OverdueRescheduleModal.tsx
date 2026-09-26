@@ -1,8 +1,12 @@
 import { useOverdueReschedule } from "@/notifications/useOverdueReschedule";
+import { useDialogA11y } from "@/hooks/useDialogA11y";
 
 export default function OverdueRescheduleModal() {
   const { open, overdue, proposals, applySmart, moveAllToday, dismiss } =
     useOverdueReschedule();
+  // Antes solo se cerraba con click en el velo: sin Escape y con el foco
+  // libre para escapar del diálogo.
+  const dialogRef = useDialogA11y<HTMLDivElement>(open, dismiss);
 
   if (!open || overdue.length === 0) return null;
 
@@ -12,13 +16,20 @@ export default function OverdueRescheduleModal() {
       onClick={dismiss}
     >
       <div
+        ref={dialogRef}
         className="mx-4 mb-6 w-full max-w-md rounded-2xl border border-amber-500/30 light:border-amber-300 bg-slate-900 light:bg-slate-50 p-5 shadow-2xl sm:mb-0"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="overdue-title"
       >
         {/* Cabecera */}
         <div className="mb-1 flex items-center gap-2">
-          <span className="text-2xl">📅</span>
-          <h2 className="text-base font-semibold text-slate-100 light:text-slate-900">
+          <span className="text-2xl" aria-hidden="true">📅</span>
+          <h2
+            id="overdue-title"
+            className="text-base font-semibold text-slate-100 light:text-slate-900"
+          >
             {overdue.length === 1
               ? "1 tarea quedó pendiente"
               : `${overdue.length} tareas quedaron pendientes`}

@@ -8,6 +8,7 @@ import { parseCapture } from "@/parsers/capture";
 import { improveCapture } from "@/llm/tasks";
 import type { Priority } from "@/domain/types";
 import { formatLocalDate, parseISODate } from "@/domain/dateutils";
+import { useDialogA11y } from "@/hooks/useDialogA11y";
 
 export default function CaptureModal() {
   const open = useStore((s) => s.captureOpen);
@@ -19,6 +20,10 @@ export default function CaptureModal() {
   const [text, setText] = useState(draft);
   const [improving, setImproving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Escape desde cualquier parte, foco atrapado dentro del diálogo y foco
+  // devuelto a quien lo abrió. Antes el Escape vivía en el onKeyDown del
+  // input, así que dejaba de funcionar en cuanto el foco se movía.
+  const dialogRef = useDialogA11y<HTMLDivElement>(open, closeCapture);
 
   useEffect(() => {
     if (open) {
@@ -77,7 +82,13 @@ export default function CaptureModal() {
         if (e.target === e.currentTarget) closeCapture();
       }}
     >
-      <div className="card w-full max-w-xl p-4 shadow-2xl" role="dialog" aria-label="Nueva tarea">
+      <div
+        ref={dialogRef}
+        className="card w-full max-w-xl p-4 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Nueva tarea"
+      >
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -88,9 +99,6 @@ export default function CaptureModal() {
             ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") closeCapture();
-            }}
             placeholder="Escribe una tarea… p. ej. Entregar informe mañana a las 3pm #trabajo @correo ~1h !1"
             className="input text-base"
             aria-label="Captura en lenguaje natural"

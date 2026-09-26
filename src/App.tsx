@@ -94,6 +94,9 @@ function AppInner() {
           target.tagName === "TEXTAREA" ||
           target.isContentEditable);
       if (typing) return;
+      // Con un diálogo abierto los atajos globales quedan fuera: si el foco
+      // está en un botón del modal, "n" abriría la captura ENCIMA.
+      if (document.querySelector('[role="dialog"]')) return;
       if (e.key === "/" || e.key === "n") {
         e.preventDefault();
         openCapture();
