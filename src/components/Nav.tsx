@@ -27,7 +27,7 @@ export default function Nav() {
   }, [view]);
 
   return (
-    <nav className="no-scrollbar flex items-center gap-1 overflow-x-auto border-b border-slate-700/60 light:border-slate-200 px-3 py-2 text-sm">
+    <nav className="no-scrollbar flex items-center gap-1 overflow-x-auto border-b border-slate-700/60 light:border-slate-200 px-3 py-1 text-sm">
       {/* shrink-0 en todo: sin él flex estruja los items en vez de dejarlos
           desbordar y scrollear, que era justo el bug original (8 items
           partidos en 2 filas a 390px). La marca se oculta en móvil para
@@ -44,7 +44,11 @@ export default function Nav() {
           // La vista activa se indica por color; sin esto un lector de
           // pantalla no puede saber en qué sección estás.
           aria-current={view === it.id ? "page" : undefined}
-          className={`shrink-0 rounded-lg px-2.5 py-1 transition-colors ${
+          // py-3 → 44px de alto, el objetivo táctil mínimo recomendado por
+          // Apple/Material (antes 28px). El py-2 de la nav baja a py-1 para
+          // que la barra no engorde: sigue midiendo 53px, muy por debajo de
+          // los 77px de las 2 filas originales.
+          className={`shrink-0 rounded-lg px-2.5 py-3 transition-colors ${
             view === it.id
               ? "bg-sky-500/15 light:bg-sky-50 font-semibold text-sky-300 light:text-sky-600"
               : "text-slate-300 light:text-slate-700 hover:bg-slate-700/50 hover:light:bg-slate-100"

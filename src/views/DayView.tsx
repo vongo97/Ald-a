@@ -154,7 +154,7 @@ export default function DayView() {
             {Array.from({ length: END_H - START_H }, (_, i) => (
               <div
                 key={i}
-                className="absolute inset-x-0 border-t border-slate-700/40 light:border-slate-200 text-[10px] text-slate-500"
+                className="absolute inset-x-0 border-t border-slate-700/40 light:border-slate-200 text-xs text-slate-500"
                 style={{ top: i * PX_PER_H }}
               >
                 <span className="absolute left-1 -top-2 bg-slate-900/80 light:bg-white px-1">{String(START_H + i).padStart(2, "0")}:00</span>
@@ -177,7 +177,7 @@ export default function DayView() {
                   style={{ top, height, borderColor: border, backgroundColor: bg, color: text }}
                 >
                   <span className="line-clamp-2 font-medium">{t.title}</span>
-                  <span className="text-[10px] opacity-80">{start}–{end}</span>
+                  <span className="text-xs opacity-80">{start}–{end}</span>
                 </div>
               );
             })}

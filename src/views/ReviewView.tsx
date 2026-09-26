@@ -63,11 +63,11 @@ export default function ReviewView() {
           const pct = Math.min(100, Math.round((min / 300) * 100));
           return (
             <div key={d} className="card flex-1 p-2 text-center" style={{ minWidth: 80 }}>
-              <p className="text-[10px] text-slate-500">{d.slice(5)}</p>
+              <p className="text-xs text-slate-500">{d.slice(5)}</p>
               <div className="mx-auto mt-1 h-12 w-2.5 rounded-full bg-slate-700 light:bg-slate-200">
                 <div className="w-full rounded-full bg-sky-400" style={{ height: `${pct}%`, marginTop: `${100 - pct}%` }} />
               </div>
-              <p className="mt-1 text-[10px] text-slate-400 light:text-slate-500">{formatMinutes(min)}</p>
+              <p className="mt-1 text-xs text-slate-400 light:text-slate-500">{formatMinutes(min)}</p>
             </div>
           );
         })}

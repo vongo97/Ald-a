@@ -103,7 +103,7 @@ export default function BreakdownModal({
                 className="input py-1 text-xs flex-1"
               />
               {item.durationMin ? (
-                <span className="shrink-0 text-[10px] text-slate-400 light:text-slate-500">{item.durationMin}m</span>
+                <span className="shrink-0 text-xs text-slate-400 light:text-slate-500">{item.durationMin}m</span>
               ) : null}
               <button
                 type="button"
