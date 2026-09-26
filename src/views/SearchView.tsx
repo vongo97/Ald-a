@@ -15,9 +15,10 @@ export default function SearchView() {
     if (!q) return [];
     return (allTasks ?? []).filter(
       (t) =>
-        t.title.toLowerCase().includes(q) ||
+        !t.deletedAt &&
+        (t.title.toLowerCase().includes(q) ||
         (t.notes?.toLowerCase().includes(q) ?? false) ||
-        t.labels.some((l) => l.includes(q)),
+        t.labels.some((l) => l.includes(q))),
     );
   }, [allTasks, query]);
 

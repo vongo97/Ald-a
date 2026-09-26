@@ -10,7 +10,7 @@ export default function InboxView() {
 
   const tasks = useMemo(() => {
     if (!allTasks) return [];
-    return sortBySuggested(allTasks.filter((t) => t.status === "todo" && !t.parentId));
+    return sortBySuggested(allTasks.filter((t) => t.status === "todo" && !t.parentId && !t.deletedAt));
   }, [allTasks]);
 
   if (!allTasks) return null;

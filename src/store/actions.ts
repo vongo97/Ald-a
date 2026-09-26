@@ -1,9 +1,9 @@
-import { db, newId } from "./db";
+import { db, newId, stampNow } from "./db";
 import type { ParsedCapture } from "@/parsers/capture";
 import type { Priority, Project, Task } from "@/domain/types";
 import { nextOccurrence } from "@/domain/recurrence";
 import { toISODate, parseISODate } from "@/domain/dateutils";
-import { autoPushTask, autoDeleteTask, autoPushProject, autoDeleteProject, autoPushTasks } from "./sync";
+import { autoPushTask, autoPushProject, autoPushTasks, autoPushDeleteTask, autoPushDeleteProject } from "./sync";
 import { randomColor } from "@/domain/color";
 
 export async function createProject(name: string, color: string): Promise<Project> {
@@ -25,11 +25,14 @@ export async function deleteProject(id: string): Promise<void> {
 
   await db.transaction("rw", db.tasks, db.projects, async () => {
     await db.tasks.where("projectId").equals(id).modify({ projectId: undefined });
-    await db.projects.delete(id);
+    // Borrado suave: marcamos deletedAt y creamos tumba.
+    const now = stampNow();
+    await db.projects.update(id, { deletedAt: now });
+    await db.tombstones.put({ id, kind: "projects", updatedAt: now });
   });
 
-  // La nube también se entera: el proyecto desaparece y sus tareas quedan huérfanas.
-  void autoDeleteProject(id);
+  // La nube también se entera vía la tumba.
+  void autoPushDeleteProject(id);
   const detached: Task[] = [];
   for (const taskId of affectedIds) {
     const fresh = await db.tasks.get(taskId);
@@ -103,16 +106,24 @@ export async function toggleTask(task: Task): Promise<void> {
 }
 
 export async function deleteTask(id: string): Promise<void> {
-  // Elimina también subtareas
+  // Elimina también subtareas con borrado suave
   const subtasks = await db.tasks.where("parentId").equals(id).toArray();
-  
+
   await db.transaction("rw", db.tasks, async () => {
-    await db.tasks.where("parentId").equals(id).delete();
-    await db.tasks.delete(id);
+    const now = stampNow();
+    // Marcamos subtareas como borradas
+    await db.tasks.where("parentId").equals(id).modify({ deletedAt: now });
+    for (const st of subtasks) {
+      await db.tasks.update(st.id, { deletedAt: now });
+      await db.tombstones.put({ id: st.id, kind: "tasks", updatedAt: now });
+    }
+    // Marcamos la tarea principal como borrada
+    await db.tasks.update(id, { deletedAt: now });
+    await db.tombstones.put({ id, kind: "tasks", updatedAt: now });
   });
-  
-  void autoDeleteTask(id);
-  subtasks.forEach(st => void autoDeleteTask(st.id));
+
+  void autoPushDeleteTask(id);
+  subtasks.forEach(st => void autoPushDeleteTask(st.id));
 }
 
 export async function addSubtask(parent: Task, title: string): Promise<Task> {
@@ -153,7 +164,6 @@ export async function addSubtasks(
     importance: parent.importance,
     status: "todo",
     parentId: parent.id,
-    // Al final y sin empates: el `order: 999` fijo repetía el valor en cada desglose.
     order: base + i,
     createdAt: new Date().toISOString(),
     ...(s.durationMin ? { durationMin: s.durationMin } : {}),

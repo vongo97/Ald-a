@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, stampNow } from "./db";
 import { supabase } from "./supabase";
 import { mergeDecision, timestamp, type SyncRecord } from "./merge";
 import type { Task, Project } from "@/domain/types";
@@ -59,8 +59,6 @@ async function sessionUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data.session?.user?.id ?? null;
 }
-
-const stampNow = (): string => new Date().toISOString();
 
 /** Quita columnas de servidor que no pertenecen al modelo local. */
 function stripRemote<T>(row: T): T {
@@ -157,7 +155,7 @@ export async function pullAndSyncFromSupabase(): Promise<void> {
   // 1) Subir primero. Este paso es el que evita perder datos offline.
   await pushLocalChanges();
 
-  // 2) Bajar.
+  // 2) Bajar tareas y proyectos.
   const [{ data: pData, error: pErr }, { data: tData, error: tErr }] = await Promise.all([
     supabase.from("projects").select("*"),
     supabase.from("tasks").select("*"),
@@ -167,16 +165,35 @@ export async function pullAndSyncFromSupabase(): Promise<void> {
     return;
   }
 
-  // 3) Fusionar dentro de una transacción.
+  // 3) Bajar tumbas para aplicar borrados remotos.
+  const [{ data: tombData, error: tombErr }] = await Promise.all([
+    supabase.from("tombstones").select("*"),
+  ]);
+
+  // 4) Fusionar dentro de una transacción.
   await db.transaction("rw", db.tasks, db.projects, async () => {
+    // Aplicar tumbas remotas: elimina localmente si la tumba es más reciente.
+    for (const raw of (tombData ?? []) as { id: string; kind: string; updatedAt: string }[]) {
+      const remoteTime = timestamp(raw.updatedAt);
+      if (raw.kind === "tasks") {
+        const local = await db.tasks.get(raw.id);
+        if (local && (!local.deletedAt || timestamp(local.deletedAt) < remoteTime)) {
+          await db.tasks.update(raw.id, { deletedAt: raw.updatedAt });
+        }
+      } else if (raw.kind === "projects") {
+        const local = await db.projects.get(raw.id);
+        if (local && (!local.deletedAt || timestamp(local.deletedAt) < remoteTime)) {
+          await db.projects.update(raw.id, { deletedAt: raw.updatedAt });
+        }
+      }
+    }
+
     for (const raw of pData ?? []) {
       const remote = stripRemote(raw);
       const local = await db.projects.get(remote.id);
       if (mergeDecision(local, remote) === "take-remote") {
         await db.projects.put(remote);
       } else if (local && !local.updatedAt) {
-        // Fila de antes de la migración: le damos reloj para que en la
-        // próxima sincronización se suba y las dos copas converjan.
         await db.projects.update(local.id, { updatedAt: stampNow() });
       }
     }
@@ -197,27 +214,25 @@ export async function autoPushTask(task: Task): Promise<void> {
   await autoPushTasks([task]);
 }
 
-/** Elimina una tarea de Supabase en segundo plano. */
-export async function autoDeleteTask(id: string): Promise<void> {
+/** Sube la tumba de una tarea a Supabase (señal de borrado). */
+export async function autoPushDeleteTask(id: string): Promise<void> {
   const userId = await sessionUserId();
   if (!userId) return;
+  const now = stampNow();
+  const { error } = await supabase.from("tombstones").upsert({ id, kind: "tasks", updated_at: now, user_id: userId });
+  if (error) console.error("AutoSync delete error (Task tombstone):", error);
+}
 
-  supabase.from("tasks").delete().eq("id", id).then(({ error }) => {
-    if (error) console.error("AutoSync delete error (Task):", error);
-  });
+/** Sube la tumba de un proyecto a Supabase (señal de borrado). */
+export async function autoPushDeleteProject(id: string): Promise<void> {
+  const userId = await sessionUserId();
+  if (!userId) return;
+  const now = stampNow();
+  const { error } = await supabase.from("tombstones").upsert({ id, kind: "projects", updated_at: now, user_id: userId });
+  if (error) console.error("AutoSync delete error (Project tombstone):", error);
 }
 
 /** Sube (Upsert) un proyecto a Supabase silenciosamente en segundo plano. */
 export async function autoPushProject(project: Project): Promise<void> {
   await autoPushProjects([project]);
-}
-
-/** Elimina un proyecto de Supabase en segundo plano. */
-export async function autoDeleteProject(id: string): Promise<void> {
-  const userId = await sessionUserId();
-  if (!userId) return;
-
-  supabase.from("projects").delete().eq("id", id).then(({ error }) => {
-    if (error) console.error("AutoSync delete error (Project):", error);
-  });
 }

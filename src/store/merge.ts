@@ -22,6 +22,7 @@ export function timestamp(value?: string | null): number {
 
 export interface SyncRecord {
   updatedAt?: string | null;
+  deletedAt?: string | null;
 }
 
 export type MergeDecision =
@@ -35,19 +36,21 @@ export type MergeDecision =
  *
  * 1. No existe en local → se baja (tarea creada en otro dispositivo).
  *
- * 2. A alguno de los dos le falta `updatedAt` → manda lo local. Cubre los dos
- *    casos reales de este proyecto:
- *      - filas locales de antes de este cambio (no tenían `updatedAt`), y el
- *        push estuvo roto por la columna `user_id` inexistente → lo local es
- *        la copia buena y más completa;
- *      - nube sin migrar todavía (aún no existe `updated_at`).
- *    Esto es seguro porque `pullAndSyncFromSupabase` **sube antes de bajar**:
- *    si manda lo local, esa misma subida es la que pone la nube al día.
+ * 2. Si una parte está borrada (tiene deletedAt) y la otra no →
+ *    gana la parte borrada (la intención de borrar es la decisión
+ *    más reciente que debe respetarse).
  *
- * 3. Ambos con fecha → gana el más reciente (multi-dispositivo).
+ * 3. A alguno de los dos le falta `updatedAt` → manda lo local.
+ *
+ * 4. Ambos con fecha → gana el más reciente (multi-dispositivo).
  */
 export function mergeDecision(local: SyncRecord | undefined, remote: SyncRecord): MergeDecision {
   if (!local) return "take-remote";
+
+  // Si local está borrada pero remota no → quedarse con el borrado.
+  if (local.deletedAt && !remote.deletedAt) return "keep-local";
+  // Si remota está borrada pero local no → aceptar el borrado remoto.
+  if (!local.deletedAt && remote.deletedAt) return "take-remote";
 
   const localTime = timestamp(local.updatedAt);
   const remoteTime = timestamp(remote.updatedAt);

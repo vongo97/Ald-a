@@ -28,6 +28,8 @@ export interface Task {
   timeBlock?: { start: string; end: string }; // time-blocking ("HH:mm")
   /** Última modificación (ISO). Es la base del merge de sincronización. */
   updatedAt?: string;
+  /** Borrado suave: timestamp cuando se marcó como eliminada. */
+  deletedAt?: string;
 }
 
 export interface Project {
@@ -36,6 +38,8 @@ export interface Project {
   color: string;
   /** Última modificación (ISO). Es la base del merge de sincronización. */
   updatedAt?: string;
+  /** Borrado suave: timestamp cuando se marcó como eliminado. */
+  deletedAt?: string;
 }
 
 export interface Settings {

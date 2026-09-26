@@ -13,7 +13,7 @@ export default function ReviewView() {
   const in7 = toISODate(addDays(startOfDay(new Date()), 7));
 
   const data = useMemo(() => {
-    const tasks = allTasks ?? [];
+    const tasks = (allTasks ?? []).filter((t) => !t.deletedAt);
     const done = tasks
       .filter((t) => t.status === "done" && t.completedAt && t.completedAt >= new Date(Date.now() - 7 * 86400_000).toISOString())
       .sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
@@ -21,7 +21,7 @@ export default function ReviewView() {
     const noDate = tasks.filter((t) => t.status === "todo" && !t.dueDate && !t.parentId);
     const weekLoad = new Map<string, number>();
     for (const t of tasks) {
-      if (t.status === "todo" && t.dueDate && t.dueDate >= today && t.dueDate <= in7 && !t.parentId) {
+      if (t.status === "todo" && t.dueDate && t.dueDate >= today && t.dueDate <= in7 && !t.parentId && !t.deletedAt) {
         weekLoad.set(t.dueDate, (weekLoad.get(t.dueDate) ?? 0) + (t.durationMin ?? 45));
       }
     }

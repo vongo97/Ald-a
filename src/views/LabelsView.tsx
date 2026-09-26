@@ -20,7 +20,7 @@ export default function LabelsView() {
   const counts = useMemo(() => {
     const map = new Map<string, number>();
     for (const t of allTasks ?? []) {
-      if (t.status !== "todo") continue;
+      if (t.status !== "todo" || t.deletedAt) continue;
       for (const l of t.labels) map.set(l, (map.get(l) ?? 0) + 1);
     }
     return new Map([...map.entries()].sort((a, b) => b[1] - a[1]));
@@ -28,7 +28,7 @@ export default function LabelsView() {
 
   if (!allTasks) return null;
 
-  const filtered = selected ? allTasks.filter((t) => t.status === "todo" && t.labels.includes(selected)) : [];
+  const filtered = selected ? allTasks.filter((t) => t.status === "todo" && !t.deletedAt && t.labels.includes(selected)) : [];
 
   const handleMagicLabel = async (label: string) => {
     if (!settings.apiKey.trim()) {
@@ -37,7 +37,7 @@ export default function LabelsView() {
     }
     setIsMagic(true);
     try {
-      const candidates = allTasks.filter((t) => t.status === "todo" && !t.labels.includes(label));
+      const candidates = allTasks.filter((t) => t.status === "todo" && !t.deletedAt && !t.labels.includes(label));
       if (candidates.length === 0) {
         pushToast(`No hay tareas libres para asignar a @${label}`);
         return;

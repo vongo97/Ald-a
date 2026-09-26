@@ -21,7 +21,7 @@ export default function ProjectsView() {
   const tasksByProject = useMemo(() => {
     const map = new Map<string, Task[]>();
     for (const t of allTasks ?? []) {
-      if (t.status !== "todo" || t.parentId) continue;
+      if (t.status !== "todo" || t.parentId || t.deletedAt) continue;
       const key = t.projectId ?? "";
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(t);

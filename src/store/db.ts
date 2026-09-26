@@ -2,9 +2,16 @@ import Dexie, { type EntityTable } from "dexie";
 import type { Project, Task } from "@/domain/types";
 import { toISODate } from "@/domain/dateutils";
 
+export interface Tombstone {
+  id: string;
+  kind: "tasks" | "projects";
+  updatedAt: string;
+}
+
 export class TareasDB extends Dexie {
   tasks!: EntityTable<Task, "id">;
   projects!: EntityTable<Project, "id">;
+  tombstones!: EntityTable<Tombstone, any>;
 
   constructor() {
     super("tareas-db");
@@ -12,21 +19,26 @@ export class TareasDB extends Dexie {
       tasks: "id, status, dueDate, projectId, parentId, order, *labels",
       projects: "id, name",
     });
+    // v2: tabla de tumbas para propagar borrados offline.
+    this.version(2).stores({
+      tombstones: "kind+id, updatedAt",
+    });
   }
 }
 
 export const db = new TareasDB();
 
+/** Timestamp ISO para sellar escrituras y borrados. */
+export const stampNow = (): string => new Date().toISOString();
+
 /**
- * Sella `updatedAt` en TODA escritura, sin que cada punto de llamada tenga
- * que acordárselo (esto cubre también los `put()` directos de BreakdownButton).
+ * Sella `updatedAt` en TODA escritura, sin que cada punto de llamada
+ * tenga que acordárselo (esto cubre también los `put()` directos de BreakdownButton).
  *
  * Regla clave: solo sella si quien escribe no trae ya su propio `updatedAt`.
  * Así `pullAndSyncFromSupabase` conserva el timestamp real de la nube en vez
  * de pisarlo con "ahora", y la importación de un backup respeta sus fechas.
  */
-const stampNow = (): string => new Date().toISOString();
-
 db.tasks.hook("creating", (_primKey, obj) => {
   const target = obj as unknown as Task;
   if (!target.updatedAt) target.updatedAt = stampNow();
@@ -98,4 +110,3 @@ export async function seedIfEmpty(): Promise<void> {
     },
   ]);
 }
-

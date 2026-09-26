@@ -18,7 +18,7 @@ export default function TodayView() {
 
   const todays = useMemo(() => {
     if (!allTasks) return [];
-    const base = allTasks.filter((t) => t.dueDate === today && t.status === "todo");
+    const base = allTasks.filter((t) => t.dueDate === today && t.status === "todo" && !t.deletedAt);
     return sortBySuggested(base);
   }, [allTasks, today]);
 

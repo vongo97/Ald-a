@@ -22,7 +22,7 @@ export default function DayView() {
   const [planning, setPlanning] = useState(false);
 
   const today = toISODate(startOfDay(new Date()));
-  const tasks = useMemo(() => (allTasks ?? []).filter((t) => t.dueDate === today && t.status === "todo"), [allTasks, today]);
+  const tasks = useMemo(() => (allTasks ?? []).filter((t) => t.dueDate === today && t.status === "todo" && !t.deletedAt), [allTasks, today]);
 
   const unscheduled = tasks.filter((t) => !t.timeBlock);
   const scheduled = tasks.filter((t) => t.timeBlock);
