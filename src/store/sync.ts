@@ -219,7 +219,7 @@ export async function autoPushDeleteTask(id: string): Promise<void> {
   const userId = await sessionUserId();
   if (!userId) return;
   const now = stampNow();
-  const { error } = await supabase.from("tombstones").upsert({ id, kind: "tasks", updated_at: now, user_id: userId });
+  const { error } = await supabase.from("tombstones").upsert({ id, kind: "tasks", updated_at: now });
   if (error) console.error("AutoSync delete error (Task tombstone):", error);
 }
 
@@ -228,7 +228,7 @@ export async function autoPushDeleteProject(id: string): Promise<void> {
   const userId = await sessionUserId();
   if (!userId) return;
   const now = stampNow();
-  const { error } = await supabase.from("tombstones").upsert({ id, kind: "projects", updated_at: now, user_id: userId });
+  const { error } = await supabase.from("tombstones").upsert({ id, kind: "projects", updated_at: now });
   if (error) console.error("AutoSync delete error (Project tombstone):", error);
 }
 
