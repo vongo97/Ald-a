@@ -14,6 +14,8 @@ import { exportDataToJSON, importDataFromJSON } from "@/store/sync";
 export default function SettingsView() {
   const { settings, saveSettings } = useSettings();
   const pushToast = useStore((s) => s.pushToast);
+  const theme = useStore((s) => s.theme);
+  const setTheme = useStore((s) => s.setTheme);
   const [draft, setDraft] = useState<Settings>(settings);
   const [testing, setTesting] = useState(false);
   const [fetchingModels, setFetchingModels] = useState(false);
@@ -141,7 +143,7 @@ export default function SettingsView() {
         <h1 className="text-xl font-bold">Ajustes</h1>
       </header>
 
-      <div className={`card mb-4 p-3 text-sm ${status === "active" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200" : "border-slate-600 bg-slate-800/60 text-slate-300"}`}>
+      <div className={`card mb-4 p-3 text-sm ${status === "active" ? "border-emerald-500/40 light:border-emerald-300 bg-emerald-500/10 light:bg-emerald-50 text-emerald-200 light:text-emerald-700" : "border-slate-600 light:border-slate-300 bg-slate-800/60 light:bg-white text-slate-300 light:text-slate-700"}`}>
         {status === "active"
           ? "✨ IA activa: desglose con LLM y planes sugeridos por el modelo."
           : "🧩 IA desactivada (modo local): las plantillas y scores funcionan sin red."}
@@ -156,7 +158,7 @@ export default function SettingsView() {
         }}
       >
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-400">Proveedor</span>
+          <span className="mb-1 block text-slate-400 light:text-slate-500">Proveedor</span>
           <select
             className="input"
             value={draft.provider}
@@ -173,7 +175,7 @@ export default function SettingsView() {
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-400">
+          <span className="mb-1 block text-slate-400 light:text-slate-500">
             Clave API {draft.provider === "gemini" && "(Obtén una gratis en aistudio.google.com)"}
           </span>
           <input
@@ -195,7 +197,7 @@ export default function SettingsView() {
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-400">Modelo</span>
+          <span className="mb-1 block text-slate-400 light:text-slate-500">Modelo</span>
           <div className="flex flex-col gap-2 sm:flex-row">
             <select
               className="input flex-1"
@@ -226,7 +228,7 @@ export default function SettingsView() {
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-400">URL base (opcional, para proxys compatibles)</span>
+          <span className="mb-1 block text-slate-400 light:text-slate-500">URL base (opcional, para proxys compatibles)</span>
           <input
             className="input"
             value={draft.baseUrl}
@@ -245,8 +247,8 @@ export default function SettingsView() {
           <div
             className={`rounded-lg p-2.5 text-xs ${
               testResult.ok
-                ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                : "border border-rose-500/40 bg-rose-500/10 text-rose-300"
+                ? "border border-emerald-500/40 light:border-emerald-300 bg-emerald-500/10 light:bg-emerald-50 text-emerald-300 light:text-emerald-600"
+                : "border border-rose-500/40 light:border-rose-300 bg-rose-500/10 light:bg-rose-50 text-rose-300 light:text-rose-600"
             }`}
           >
             {testResult.msg}
@@ -259,7 +261,7 @@ export default function SettingsView() {
           </button>
           <button
             type="button"
-            className="btn-ghost text-sky-400"
+            className="btn-ghost text-sky-400 light:text-sky-600"
             disabled={fetchingModels || !draft.apiKey.trim()}
             onClick={() => void loadModels()}
           >
@@ -289,14 +291,14 @@ export default function SettingsView() {
         </div>
       </form>
 
-      <div className="mt-5 space-y-2 text-xs text-slate-400">
+      <div className="mt-5 space-y-2 text-xs text-slate-400 light:text-slate-500">
         <p>
-          💡 <span className="font-semibold text-slate-200">Recomendación gratuita:</span> Google ofrece una capa gratuita muy generosa en{" "}
+          💡 <span className="font-semibold text-slate-200 light:text-slate-800">Recomendación gratuita:</span> Google ofrece una capa gratuita muy generosa en{" "}
           <a
             href="https://aistudio.google.com/app/apikey"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sky-400 underline hover:text-sky-300"
+            className="text-sky-400 light:text-sky-600 underline hover:text-sky-300 hover:light:text-sky-600"
           >
             Google AI Studio
           </a>{" "}
@@ -304,20 +306,52 @@ export default function SettingsView() {
         </p>
         <p className="text-slate-500">
           Otras opciones: seleccionando «OpenAI compatible» puedes conectar servicios como{" "}
-          <span className="text-slate-300">OpenRouter</span> o{" "}
-          <span className="text-slate-300">Ollama</span> para correr modelos 100% locales y privados en tu máquina usando el campo de URL base.
+          <span className="text-slate-300 light:text-slate-700">OpenRouter</span> o{" "}
+          <span className="text-slate-300 light:text-slate-700">Ollama</span> para correr modelos 100% locales y privados en tu máquina usando el campo de URL base.
         </p>
       </div>
 
+      {/* ── Sección Apariencia ── */}
+      <div className="mt-6 rounded-xl border border-slate-700/50 light:border-slate-200 bg-slate-800/40 light:bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold text-slate-200 light:text-slate-800">🎨 Apariencia</h2>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium text-slate-300 light:text-slate-700">Tema</p>
+            <p className="text-xs text-slate-500">
+              «Sistema» sigue el tema de tu dispositivo y cambia solo.
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-1" role="group" aria-label="Tema">
+            {(
+              [
+                ["light", "☀️ Claro"],
+                ["dark", "🌙 Oscuro"],
+                ["system", "💻 Sistema"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={theme === value}
+                className={`btn text-xs ${theme === value ? "btn-primary" : "btn-ghost"}`}
+                onClick={() => setTheme(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* ── Sección App & Notificaciones ── */}
-      <div className="mt-6 rounded-xl border border-slate-700/50 bg-slate-800/40 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200">📲 App &amp; Notificaciones</h2>
+      <div className="mt-6 rounded-xl border border-slate-700/50 light:border-slate-200 bg-slate-800/40 light:bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold text-slate-200 light:text-slate-800">📲 App &amp; Notificaciones</h2>
         <div className="space-y-3">
 
           {/* Instalar como app */}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-medium text-slate-300">Instalar como app de escritorio</p>
+              <p className="text-xs font-medium text-slate-300 light:text-slate-700">Instalar como app de escritorio</p>
               <p className="text-xs text-slate-500">
                 {installed
                   ? "✅ App instalada. Puedes configurarla para abrirse al iniciar Windows."
@@ -328,7 +362,7 @@ export default function SettingsView() {
               <button
                 type="button"
                 className={`btn-ghost shrink-0 text-xs ${
-                  canInstall ? "text-sky-400" : "cursor-not-allowed text-slate-500"
+                  canInstall ? "text-sky-400 light:text-sky-600" : "cursor-not-allowed text-slate-500"
                 }`}
                 disabled={!canInstall}
                 onClick={() => void install()}
@@ -342,7 +376,7 @@ export default function SettingsView() {
           {/* Notificaciones */}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-medium text-slate-300">Notificaciones de bloques de tiempo</p>
+              <p className="text-xs font-medium text-slate-300 light:text-slate-700">Notificaciones de bloques de tiempo</p>
               <p className="text-xs text-slate-500">
                 {notifStatus === "granted"
                   ? "✅ Activadas. Recibirás alertas 5 min antes y al inicio de cada bloque."
@@ -356,7 +390,7 @@ export default function SettingsView() {
             {notifStatus === "default" && (
               <button
                 type="button"
-                className="btn-ghost shrink-0 text-xs text-sky-400"
+                className="btn-ghost shrink-0 text-xs text-sky-400 light:text-sky-600"
                 onClick={async () => {
                   const granted = await requestNotifPermission();
                   setNotifStatus(granted ? "granted" : "denied");
@@ -372,12 +406,12 @@ export default function SettingsView() {
       </div>
 
       {/* ── Sección Sincronización & Backup ── */}
-      <div className="mt-6 rounded-xl border border-slate-700/50 bg-slate-800/40 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200">💾 Backup &amp; Sincronización</h2>
+      <div className="mt-6 rounded-xl border border-slate-700/50 light:border-slate-200 bg-slate-800/40 light:bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold text-slate-200 light:text-slate-800">💾 Backup &amp; Sincronización</h2>
         
         {/* Backup Local JSON */}
         <div className="mb-6 space-y-2">
-          <p className="text-xs font-medium text-slate-300">Backup Local (Sin nube)</p>
+          <p className="text-xs font-medium text-slate-300 light:text-slate-700">Backup Local (Sin nube)</p>
           <div className="flex gap-2">
             <button type="button" className="btn-ghost text-xs" onClick={() => void exportDataToJSON()}>
               ⬇️ Exportar JSON
@@ -404,18 +438,18 @@ export default function SettingsView() {
         </div>
 
         {/* Sincronización en la Nube (Automática) */}
-        <div className="space-y-3 pt-4 border-t border-slate-700/60 mt-4">
-          <p className="text-xs font-medium text-slate-300">Nube & Multi-dispositivo</p>
+        <div className="space-y-3 pt-4 border-t border-slate-700/60 light:border-slate-200 mt-4">
+          <p className="text-xs font-medium text-slate-300 light:text-slate-700">Nube & Multi-dispositivo</p>
           
           {session ? (
-            <div className="rounded-lg bg-emerald-500/10 p-3 border border-emerald-500/20">
-              <p className="text-xs text-emerald-300 mb-2">
+            <div className="rounded-lg bg-emerald-500/10 light:bg-emerald-50 p-3 border border-emerald-500/20 light:border-emerald-200">
+              <p className="text-xs text-emerald-300 light:text-emerald-600 mb-2">
                 ✅ Sincronización automática activada.<br/>
                 Conectado como: <strong>{session.user.email}</strong>
               </p>
               <button
                 type="button"
-                className="btn-ghost text-xs text-rose-400"
+                className="btn-ghost text-xs text-rose-400 light:text-rose-600"
                 onClick={async () => {
                   const { supabase } = await import("@/store/supabase");
                   await supabase.auth.signOut();
@@ -427,8 +461,8 @@ export default function SettingsView() {
               </button>
             </div>
           ) : (
-            <div className="rounded-lg bg-slate-900/50 p-3">
-              <p className="text-xs text-slate-400 mb-3">
+            <div className="rounded-lg bg-slate-900/50 light:bg-slate-100 p-3">
+              <p className="text-xs text-slate-400 light:text-slate-500 mb-3">
                 Conecta con Google para respaldar tus tareas automáticamente y compartirlas entre tus dispositivos.
               </p>
               <div className="flex flex-col gap-2">
@@ -436,7 +470,7 @@ export default function SettingsView() {
                     contraseñas que guardar ni rate limits de Supabase. */}
                 <button
                   type="button"
-                  className="btn-ghost mt-2 flex items-center justify-center gap-2 border border-slate-700/50 hover:bg-slate-800"
+                  className="btn-ghost mt-2 flex items-center justify-center gap-2 border border-slate-700/50 light:border-slate-200 hover:bg-slate-800 hover:light:bg-slate-100"
                   disabled={authLoading}
                   onClick={async () => {
                     setAuthLoading(true);

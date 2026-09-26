@@ -34,28 +34,28 @@ export default function ReviewView() {
     <section>
       <header className="mb-3">
         <h1 className="text-xl font-bold">Revisión semanal</h1>
-        <p className="text-xs text-slate-400">Ritual de 10 minutos: despeja lo vencido, da fechas a lo sin fecha y mira la semana.</p>
+        <p className="text-xs text-slate-400 light:text-slate-500">Ritual de 10 minutos: despeja lo vencido, da fechas a lo sin fecha y mira la semana.</p>
       </header>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="card p-3">
-          <h2 className="mb-2 text-sm font-semibold text-emerald-300">✅ Completadas (7 días)</h2>
+          <h2 className="mb-2 text-sm font-semibold text-emerald-300 light:text-emerald-600">✅ Completadas (7 días)</h2>
           <p className="text-2xl font-bold">{data.done.length}</p>
-          <p className="text-xs text-slate-400">Celebra el progreso.</p>
+          <p className="text-xs text-slate-400 light:text-slate-500">Celebra el progreso.</p>
         </div>
         <div className="card p-3">
-          <h2 className="mb-2 text-sm font-semibold text-rose-300">⚠️ Vencidas</h2>
+          <h2 className="mb-2 text-sm font-semibold text-rose-300 light:text-rose-600">⚠️ Vencidas</h2>
           <p className="text-2xl font-bold">{data.overdue.length}</p>
-          <p className="text-xs text-slate-400">Reprograma o elimina sin piedad.</p>
+          <p className="text-xs text-slate-400 light:text-slate-500">Reprograma o elimina sin piedad.</p>
         </div>
         <div className="card p-3">
-          <h2 className="mb-2 text-sm font-semibold text-sky-300">📥 Sin fecha</h2>
+          <h2 className="mb-2 text-sm font-semibold text-sky-300 light:text-sky-600">📥 Sin fecha</h2>
           <p className="text-2xl font-bold">{data.noDate.length}</p>
-          <p className="text-xs text-slate-400">Dales fecha o suéltalas.</p>
+          <p className="text-xs text-slate-400 light:text-slate-500">Dales fecha o suéltalas.</p>
         </div>
       </div>
 
-      <h2 className="mb-2 mt-5 text-sm font-semibold text-slate-400">Carga de los próximos 7 días</h2>
+      <h2 className="mb-2 mt-5 text-sm font-semibold text-slate-400 light:text-slate-500">Carga de los próximos 7 días</h2>
       <div className="flex flex-wrap gap-2">
         {Array.from({ length: 7 }, (_, i) => {
           const d = toISODate(addDays(startOfDay(new Date()), i));
@@ -64,10 +64,10 @@ export default function ReviewView() {
           return (
             <div key={d} className="card flex-1 p-2 text-center" style={{ minWidth: 80 }}>
               <p className="text-[10px] text-slate-500">{d.slice(5)}</p>
-              <div className="mx-auto mt-1 h-12 w-2.5 rounded-full bg-slate-700">
+              <div className="mx-auto mt-1 h-12 w-2.5 rounded-full bg-slate-700 light:bg-slate-200">
                 <div className="w-full rounded-full bg-sky-400" style={{ height: `${pct}%`, marginTop: `${100 - pct}%` }} />
               </div>
-              <p className="mt-1 text-[10px] text-slate-400">{formatMinutes(min)}</p>
+              <p className="mt-1 text-[10px] text-slate-400 light:text-slate-500">{formatMinutes(min)}</p>
             </div>
           );
         })}
@@ -75,7 +75,7 @@ export default function ReviewView() {
 
       {data.overdue.length > 0 && (
         <>
-          <h2 className="mb-2 mt-5 text-sm font-semibold text-slate-400">Vencidas</h2>
+          <h2 className="mb-2 mt-5 text-sm font-semibold text-slate-400 light:text-slate-500">Vencidas</h2>
           <ul className="space-y-2">
             {data.overdue.map((t) => (
               <li key={t.id}>
@@ -88,7 +88,7 @@ export default function ReviewView() {
 
       {data.noDate.length > 0 && (
         <>
-          <h2 className="mb-2 mt-5 text-sm font-semibold text-slate-400">Sin fecha</h2>
+          <h2 className="mb-2 mt-5 text-sm font-semibold text-slate-400 light:text-slate-500">Sin fecha</h2>
           <ul className="space-y-2">
             {data.noDate.map((t) => (
               <li key={t.id}>

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Task, ViewId } from "@/domain/types";
 import type { Session } from "@supabase/supabase-js";
 import { db } from "./db";
+import { applyTheme, persistTheme, readThemePref, type ThemePref } from "./theme";
 
 export interface Toast {
   id: string;
@@ -18,6 +19,8 @@ interface StoreState {
   showDeviation: boolean;
   selectedProjectId?: string;
   session: Session | null;
+  /** Preferencia de tema: light | dark | system. */
+  theme: ThemePref;
 
   setView: (v: ViewId) => void;
   setSearchQuery: (q: string) => void;
@@ -28,6 +31,7 @@ interface StoreState {
   dismissToast: (id: string) => void;
   setShowDeviation: (v: boolean) => void;
   selectProject: (id?: string) => void;
+  setTheme: (t: ThemePref) => void;
   loadSession: () => Promise<void>;
 }
 
@@ -42,6 +46,7 @@ export const useStore = create<StoreState>((set) => ({
   showDeviation: false,
   selectedProjectId: undefined,
   session: null,
+  theme: readThemePref(),
 
   setView: (view) => set({ view, showDeviation: false }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
@@ -53,6 +58,11 @@ export const useStore = create<StoreState>((set) => ({
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setShowDeviation: (showDeviation) => set({ showDeviation }),
   selectProject: (selectedProjectId) => set({ selectedProjectId, view: "proyectos" }),
+  setTheme: (theme) => {
+    applyTheme(theme);
+    persistTheme(theme);
+    set({ theme });
+  },
   loadSession: async () => {
     try {
       const { supabase } = await import("./supabase");

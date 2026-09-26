@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/store/useStore";
+import { applyTheme } from "@/store/theme";
 import { SettingsProvider } from "@/store/SettingsContext";
 import Nav from "@/components/Nav";
 import CaptureModal from "@/components/CaptureModal";
@@ -29,6 +30,7 @@ function AppInner() {
   const openCapture = useStore((s) => s.openCapture);
   const loadSession = useStore((s) => s.loadSession);
   const session = useStore((s) => s.session);
+  const theme = useStore((s) => s.theme);
   const [showNotifBanner, setShowNotifBanner] = useState(false);
   const pulledFor = useRef<string | null>(null);
 
@@ -36,6 +38,17 @@ function AppInner() {
   useEffect(() => {
     void loadSession();
   }, [loadSession]);
+
+  // El tema ya lo aplicó el script inline de index.html antes del paint;
+  // aquí solo nos mantenemos al día (cambio en Ajustes o cambio del SO).
+  useEffect(() => {
+    applyTheme(theme);
+    if (theme !== "system") return;
+    const mq = window.matchMedia("(prefers-color-scheme: light)");
+    const onChange = () => applyTheme("system");
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [theme]);
 
   // Al conocer la sesión (login por contraseña, OAuth con Google o recarga),
   // sincroniza una sola vez. Antes esto solo ocurría en el login por contraseña,
@@ -98,7 +111,7 @@ function AppInner() {
 
       {/* Banner de permiso de notificaciones */}
       {showNotifBanner && (
-        <div className="mx-4 mt-2 flex items-center gap-3 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-200">
+        <div className="mx-4 mt-2 flex items-center gap-3 rounded-xl border border-sky-500/30 light:border-sky-200 bg-sky-500/10 light:bg-sky-50 px-4 py-3 text-sm text-sky-200 light:text-sky-700">
           <span className="text-xl">🔔</span>
           <span className="flex-1">Activa las notificaciones para recibir alertas de tus bloques de tiempo.</span>
           <button
@@ -113,7 +126,7 @@ function AppInner() {
           </button>
           <button
             type="button"
-            className="text-sky-400 hover:text-sky-200"
+            className="text-sky-400 light:text-sky-600 hover:text-sky-200 hover:light:text-sky-700"
             onClick={() => setShowNotifBanner(false)}
             aria-label="Cerrar"
           >
@@ -140,7 +153,7 @@ function AppInner() {
       <button
         type="button"
         onClick={() => openCapture()}
-        className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-sky-500 text-2xl font-bold text-slate-950 shadow-lg shadow-sky-500/25 transition hover:bg-sky-400"
+        className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-sky-500 light:bg-sky-600 text-2xl font-bold text-slate-950 light:text-white shadow-lg shadow-sky-500/25 transition hover:bg-sky-400"
         aria-label="Nueva tarea (tecla /)"
       >
         +

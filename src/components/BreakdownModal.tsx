@@ -70,20 +70,20 @@ export default function BreakdownModal({
     >
       <div className="card w-full max-w-lg p-5 shadow-2xl" role="dialog" aria-label="Revisar desglose de tarea">
         <header className="mb-4">
-          <h2 className="text-base font-bold text-slate-100">Desglose sugerido</h2>
-          <p className="mt-0.5 text-xs text-slate-400">
-            Revisa, edita o desmarca las subtareas para «<span className="text-slate-200">{taskTitle}</span>» antes de crearlas.
+          <h2 className="text-base font-bold text-slate-100 light:text-slate-900">Desglose sugerido</h2>
+          <p className="mt-0.5 text-xs text-slate-400 light:text-slate-500">
+            Revisa, edita o desmarca las subtareas para «<span className="text-slate-200 light:text-slate-800">{taskTitle}</span>» antes de crearlas.
           </p>
         </header>
 
         <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
           {items.map((item) => (
-            <div key={item.id} className="flex items-center gap-2 rounded-lg bg-slate-900/60 p-2">
+            <div key={item.id} className="flex items-center gap-2 rounded-lg bg-slate-900/60 light:bg-white p-2">
               <input
                 type="checkbox"
                 checked={item.checked}
                 onChange={() => toggleCheck(item.id)}
-                className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-400 cursor-pointer"
+                className="h-4 w-4 rounded border-slate-600 light:border-slate-300 bg-slate-800 light:bg-slate-100 text-sky-500 light:text-sky-600 focus:ring-sky-400 focus:light:ring-sky-500 cursor-pointer"
                 aria-label={`Seleccionar ${item.title}`}
               />
               <input
@@ -94,12 +94,12 @@ export default function BreakdownModal({
                 className="input py-1 text-xs flex-1"
               />
               {item.durationMin ? (
-                <span className="shrink-0 text-[10px] text-slate-400">{item.durationMin}m</span>
+                <span className="shrink-0 text-[10px] text-slate-400 light:text-slate-500">{item.durationMin}m</span>
               ) : null}
               <button
                 type="button"
                 onClick={() => removeItem(item.id)}
-                className="text-slate-500 hover:text-rose-400 px-1 text-sm"
+                className="text-slate-500 hover:text-rose-400 hover:light:text-rose-600 px-1 text-sm"
                 aria-label="Eliminar subtarea"
               >
                 ✕
@@ -111,7 +111,7 @@ export default function BreakdownModal({
           )}
         </div>
 
-        <div className="mt-3 flex items-center justify-between border-t border-slate-700/60 pt-3">
+        <div className="mt-3 flex items-center justify-between border-t border-slate-700/60 light:border-slate-200 pt-3">
           <button type="button" onClick={addItem} className="btn-ghost py-1 text-xs">
             + Añadir otra
           </button>

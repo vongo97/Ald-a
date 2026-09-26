@@ -12,19 +12,19 @@ export default function OverdueRescheduleModal() {
       onClick={dismiss}
     >
       <div
-        className="mx-4 mb-6 w-full max-w-md rounded-2xl border border-amber-500/30 bg-slate-900 p-5 shadow-2xl sm:mb-0"
+        className="mx-4 mb-6 w-full max-w-md rounded-2xl border border-amber-500/30 light:border-amber-300 bg-slate-900 light:bg-slate-50 p-5 shadow-2xl sm:mb-0"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Cabecera */}
         <div className="mb-1 flex items-center gap-2">
           <span className="text-2xl">📅</span>
-          <h2 className="text-base font-semibold text-slate-100">
+          <h2 className="text-base font-semibold text-slate-100 light:text-slate-900">
             {overdue.length === 1
               ? "1 tarea quedó pendiente"
               : `${overdue.length} tareas quedaron pendientes`}
           </h2>
         </div>
-        <p className="mb-4 text-xs text-slate-400">
+        <p className="mb-4 text-xs text-slate-400 light:text-slate-500">
           {overdue.length === 1
             ? "Esta tarea tenía fecha anterior a hoy. ¿La movemos?"
             : "Estas tareas tenían fecha anterior a hoy. ¿Las movemos?"}
@@ -35,9 +35,9 @@ export default function OverdueRescheduleModal() {
           {overdue.slice(0, 8).map((t) => (
             <li
               key={t.id}
-              className="flex items-center gap-2 rounded-lg bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300"
+              className="flex items-center gap-2 rounded-lg bg-slate-800/60 light:bg-white px-3 py-1.5 text-xs text-slate-300 light:text-slate-700"
             >
-              <span className="text-amber-400">⚠</span>
+              <span className="text-amber-400 light:text-amber-600">⚠</span>
               <span className="line-clamp-1">{t.title}</span>
               {t.dueDate && (
                 <span className="ml-auto shrink-0 text-slate-500">{t.dueDate}</span>
@@ -64,14 +64,14 @@ export default function OverdueRescheduleModal() {
           )}
           <button
             type="button"
-            className="btn-ghost flex-1 text-slate-300"
+            className="btn-ghost flex-1 text-slate-300 light:text-slate-700"
             onClick={() => void moveAllToday()}
           >
             Mover todas a hoy
           </button>
           <button
             type="button"
-            className="btn-ghost w-full text-slate-400"
+            className="btn-ghost w-full text-slate-400 light:text-slate-500"
             onClick={dismiss}
           >
             Ignorar

@@ -7,6 +7,30 @@
     <meta name="description" content="Gestor de tareas inteligente con captura en lenguaje natural, capacidad de día y time-blocking" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjIwIiBmaWxsPSIjMGYxNzJhIi8+PHBhdGggZD0iTTI1IDUwIEw0MCA2NSBMNzUgMzAiIHN0cm9rZT0iIzM4YmRmOCIgc3Ryb2tlLXdpZHRoPSI4IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=" />
     <title>Mis Tareas</title>
+    <script>
+      /* Aplica el tema ANTES del primer paint para evitar el parpadeo
+         oscuro→claro. Debe ser inline y síncrono: si va en main.tsx el
+         usuario ya habría visto un frame con el tema equivocado. */
+      (function () {
+        try {
+          var p = null;
+          try { p = localStorage.getItem("ald-a:theme"); } catch (e) {}
+          // Mismos casos que readThemePref() en src/store/theme.ts. Si aquí
+          // y en el store no se interpretan igual, React repinta el tema al
+          // montar y se ve un parpadeo en el primer frame.
+          var dark =
+            p === "light" ? false :
+            p === "system" ? !window.matchMedia("(prefers-color-scheme: light)").matches :
+            true;
+          var el = document.documentElement;
+          el.classList.toggle("light", !dark);
+          el.classList.toggle("dark", dark);
+          el.style.colorScheme = dark ? "dark" : "light";
+          var m = document.querySelector('meta[name="theme-color"]');
+          if (m) m.setAttribute("content", dark ? "#0f172a" : "#f8fafc");
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -110,7 +110,7 @@ export default function LabelsView() {
               key={label}
               type="button"
               onClick={() => setSelected(selected === label ? null : label)}
-              className={`chip cursor-pointer bg-amber-500/15 px-3 py-1.5 text-sm text-amber-300 ${selected === label ? "ring-2 ring-amber-400" : ""}`}
+              className={`chip cursor-pointer bg-amber-500/15 light:bg-amber-100 px-3 py-1.5 text-sm text-amber-300 light:text-amber-700 ${selected === label ? "ring-2 ring-amber-400 light:ring-amber-500" : ""}`}
             >
               @{label} · {count}
             </button>
@@ -120,7 +120,7 @@ export default function LabelsView() {
 
       {selected && (
         <div className="mt-4">
-          <h2 className="mb-2 text-sm font-semibold text-slate-400">Tareas con @{selected}</h2>
+          <h2 className="mb-2 text-sm font-semibold text-slate-400 light:text-slate-500">Tareas con @{selected}</h2>
           <ul className="space-y-2">
             {filtered.map((t) => (
               <li key={t.id}>
@@ -128,10 +128,10 @@ export default function LabelsView() {
               </li>
             ))}
           </ul>
-          <div className="mt-4 pt-3 border-t border-slate-700/60">
+          <div className="mt-4 pt-3 border-t border-slate-700/60 light:border-slate-200">
             <button
               type="button"
-              className="btn-ghost text-xs text-sky-400 w-full justify-center"
+              className="btn-ghost text-xs text-sky-400 light:text-sky-600 w-full justify-center"
               onClick={() => openCapture(`@${selected} `)}
             >
               + Nueva tarea en @{selected}

@@ -17,8 +17,8 @@ export default function Nav() {
   const setView = useStore((s) => s.setView);
 
   return (
-    <nav className="flex flex-wrap items-center gap-1 border-b border-slate-700/60 px-3 py-2 text-sm">
-      <span className="mr-2 font-bold tracking-tight text-sky-400">Mis Tareas</span>
+    <nav className="flex flex-wrap items-center gap-1 border-b border-slate-700/60 light:border-slate-200 px-3 py-2 text-sm">
+      <span className="mr-2 font-bold tracking-tight text-sky-400 light:text-sky-600">Mis Tareas</span>
       {ITEMS.map((it) => (
         <button
           key={it.id}
@@ -26,8 +26,8 @@ export default function Nav() {
           onClick={() => setView(it.id)}
           className={`rounded-lg px-2.5 py-1 transition-colors ${
             view === it.id
-              ? "bg-sky-500/15 font-semibold text-sky-300"
-              : "text-slate-300 hover:bg-slate-700/50"
+              ? "bg-sky-500/15 light:bg-sky-50 font-semibold text-sky-300 light:text-sky-600"
+              : "text-slate-300 light:text-slate-700 hover:bg-slate-700/50 hover:light:bg-slate-100"
           }`}
         >
           {it.label}

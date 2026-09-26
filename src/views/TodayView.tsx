@@ -32,14 +32,14 @@ export default function TodayView() {
     <section>
       <header className="mb-3 flex items-baseline justify-between">
         <h1 className="text-xl font-bold">Hoy</h1>
-        <span className="text-xs text-slate-400">
+        <span className="text-xs text-slate-400 light:text-slate-500">
           {todays.length} tarea{todays.length === 1 ? "" : "s"}
         </span>
       </header>
 
       {overdue.length > 0 && (
-        <div className="card mb-4 border-amber-500/40 bg-amber-500/10 p-3">
-          <p className="text-sm text-amber-200">
+        <div className="card mb-4 border-amber-500/40 light:border-amber-300 bg-amber-500/10 light:bg-amber-50 p-3">
+          <p className="text-sm text-amber-200 light:text-amber-700">
             ⚠️ {overdue.length} tarea{overdue.length === 1 ? "" : "s"} vencida
             {overdue.length === 1 ? "" : "s"} desde antes de hoy.
           </p>
@@ -55,7 +55,7 @@ export default function TodayView() {
           >
             Reprogramar sugerencia (un clic)
           </button>
-          <p className="mt-1 text-xs text-amber-200/70">
+          <p className="mt-1 text-xs text-amber-200/70 light:text-amber-700">
             {proposals.length > 0
               ? "Mueve las vencidas a los primeros días con hueco, respetando tu carga."
               : "No hay propuesta automática; revisa las fechas manualmente."}
@@ -64,7 +64,7 @@ export default function TodayView() {
       )}
 
       {capacity.overbooked && (
-        <div className="card mb-4 border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-200">
+        <div className="card mb-4 border-rose-500/40 light:border-rose-300 bg-rose-500/10 light:bg-rose-50 p-3 text-sm text-rose-200 light:text-rose-700">
           🔋 Tu plan de hoy no cabe: {formatMinutes(capacity.committedMin + capacity.estimatedMin)} de{" "}
           {formatMinutes(capacity.capacityMin)} disponibles. Considera mover algo a mañana.
         </div>
@@ -87,8 +87,8 @@ export function EmptyState({ icon, title, hint }: { icon: string; title: string;
   return (
     <div className="card flex flex-col items-center gap-1 p-8 text-center">
       <span className="text-3xl">{icon}</span>
-      <p className="font-semibold text-slate-200">{title}</p>
-      <p className="max-w-sm text-sm text-slate-400">{hint}</p>
+      <p className="font-semibold text-slate-200 light:text-slate-800">{title}</p>
+      <p className="max-w-sm text-sm text-slate-400 light:text-slate-500">{hint}</p>
     </div>
   );
 }

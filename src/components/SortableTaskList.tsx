@@ -42,7 +42,7 @@ function SortableItem({ task, showScore }: { task: Task; showScore?: boolean }) 
         type="button"
         {...attributes}
         {...listeners}
-        className="cursor-grab active:cursor-grabbing p-1 text-slate-500 hover:text-slate-300 opacity-40 group-hover:opacity-100 transition-opacity select-none text-xs"
+        className="cursor-grab active:cursor-grabbing p-1 text-slate-500 hover:text-slate-300 hover:light:text-slate-700 opacity-40 group-hover:opacity-100 transition-opacity select-none text-xs"
         title="Arrastrar para reordenar"
         aria-label="Arrastrar para reordenar"
       >

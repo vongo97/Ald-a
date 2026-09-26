@@ -71,7 +71,7 @@ export default function ProjectsView() {
                 key={p.id}
                 type="button"
                 onClick={() => selectProject(p.id === selectedProjectId ? undefined : p.id)}
-                className={`chip cursor-pointer px-3 py-1.5 text-sm ${p.id === selectedProjectId ? "ring-2 ring-sky-400" : ""}`}
+                className={`chip cursor-pointer px-3 py-1.5 text-sm ${p.id === selectedProjectId ? "ring-2 ring-sky-400 light:ring-sky-500" : ""}`}
                 style={{ backgroundColor: `${p.color}22`, color: p.color }}
               >
                 📁 {p.name} · {count}
@@ -82,8 +82,8 @@ export default function ProjectsView() {
       )}
 
       {selected && (
-        <div className="mt-5 rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/60 pb-3">
+        <div className="mt-5 rounded-xl border border-slate-700/60 light:border-slate-200 bg-slate-900/40 light:bg-white p-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/60 light:border-slate-200 pb-3">
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -119,7 +119,7 @@ export default function ProjectsView() {
             </button>
           </div>
 
-          <h2 className="mb-2 text-sm font-semibold text-slate-400">Tareas de «{selected.name}»</h2>
+          <h2 className="mb-2 text-sm font-semibold text-slate-400 light:text-slate-500">Tareas de «{selected.name}»</h2>
           {(tasksByProject.get(selected.id) ?? []).length === 0 ? (
             <p className="py-2 text-xs text-slate-500">No hay tareas en este proyecto.</p>
           ) : (
@@ -132,10 +132,10 @@ export default function ProjectsView() {
             </ul>
           )}
 
-          <div className="mt-4 pt-3 border-t border-slate-700/60">
+          <div className="mt-4 pt-3 border-t border-slate-700/60 light:border-slate-200">
             <button
               type="button"
-              className="btn-ghost text-xs text-sky-400 w-full justify-center"
+              className="btn-ghost text-xs text-sky-400 light:text-sky-600 w-full justify-center"
               onClick={() => openCapture(`#${selected.name.replace(/\s+/g, "-")} `)}
             >
               + Nueva tarea en {selected.name}

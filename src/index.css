@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Aspecto por defecto = OSCURO, que es como ha venido viéndose la app.
+   La variante `light:` aplica solo debajo de `.light` en el <html>, que la
+   pone el bootstrap de index.html ANTES del primer paint.
+
+   Se eligió `light:` (y no `dark:`) a propósito: así las clases originales
+   se quedan intactas y el modo claro se AÑADE por encima. Mientras un
+   fichero no esté adaptado se sigue viendo oscuro — nunca a medias. */
+@custom-variant light (&:where(.light, .light *));
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
@@ -9,6 +17,16 @@
 
 :root {
   color-scheme: dark;
+  --bg: #0f172a;
+  --fg: #e2e8f0;
+  --scrollbar: #334155;
+}
+
+html.light {
+  color-scheme: light;
+  --bg: #f8fafc;
+  --fg: #0f172a;
+  --scrollbar: #cbd5e1;
 }
 
 html,
@@ -19,29 +37,29 @@ body,
 
 body {
   margin: 0;
-  background: var(--color-ink);
-  color: #e2e8f0;
+  background: var(--bg);
+  color: var(--fg);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 @layer components {
   .card {
-    @apply rounded-xl border border-slate-700/60 bg-slate-800/60;
+    @apply rounded-xl border border-slate-700/60 bg-slate-800/60 light:border-slate-200 light:bg-white;
   }
   .btn {
     @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer;
   }
   .btn-primary {
-    @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer bg-sky-500 text-slate-950 hover:bg-sky-400;
+    @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer bg-sky-500 text-slate-950 hover:bg-sky-400 light:bg-sky-600 light:text-white light:hover:bg-sky-500;
   }
   .btn-ghost {
-    @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer border border-slate-600 text-slate-200 hover:bg-slate-700/60;
+    @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer border border-slate-600 text-slate-200 hover:bg-slate-700/60 light:border-slate-300 light:text-slate-700 light:hover:bg-slate-100;
   }
   .btn-danger {
-    @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer border border-rose-500/50 text-rose-300 hover:bg-rose-500/10;
+    @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer border border-rose-500/50 text-rose-300 hover:bg-rose-500/10 light:border-rose-300 light:text-rose-600 light:hover:bg-rose-50;
   }
   .input {
-    @apply w-full rounded-lg border border-slate-600 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none;
+    @apply w-full rounded-lg border border-slate-600 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-400 focus:outline-none light:border-slate-300 light:bg-white light:text-slate-900 light:placeholder:text-slate-400;
   }
   .chip {
     @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
@@ -51,5 +69,5 @@ body {
 /* Scrollbar discreto */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #334155 transparent;
+  scrollbar-color: var(--scrollbar) transparent;
 }

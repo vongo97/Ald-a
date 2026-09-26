@@ -68,7 +68,7 @@ export default function CaptureModal() {
   };
 
   const chip =
-    "chip bg-slate-700/70 text-slate-200";
+    "chip bg-slate-700/70 light:bg-slate-100 text-slate-200 light:text-slate-800";
 
   return (
     <div
@@ -97,38 +97,38 @@ export default function CaptureModal() {
           />
           <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
             {parsed.dueDate && (
-              <span className={`${chip} bg-sky-500/20 text-sky-300`}>
+              <span className={`${chip} bg-sky-500/20 light:bg-sky-100 text-sky-300 light:text-sky-600`}>
                 📅 {formatLocalDate(parseISODate(parsed.dueDate))}
                 {parsed.dueTime ? ` · ${parsed.dueTime}` : ""}
               </span>
             )}
             {parsed.recurrence && (
-              <span className={`${chip} bg-violet-500/20 text-violet-300`}>
+              <span className={`${chip} bg-violet-500/20 light:bg-violet-100 text-violet-300 light:text-violet-600`}>
                 🔁 recurre
               </span>
             )}
             {parsed.projectName && (
-              <span className={`${chip} bg-emerald-500/20 text-emerald-300`}>
+              <span className={`${chip} bg-emerald-500/20 light:bg-emerald-100 text-emerald-300 light:text-emerald-600`}>
                 📁 {parsed.projectName}
               </span>
             )}
             {parsed.labels.map((l) => (
-              <span key={l} className={`${chip} bg-amber-500/20 text-amber-300`}>
+              <span key={l} className={`${chip} bg-amber-500/20 light:bg-amber-100 text-amber-300 light:text-amber-700`}>
                 @{l}
               </span>
             ))}
             {parsed.durationMin && (
-              <span className={`${chip} bg-slate-500/20 text-slate-300`}>
+              <span className={`${chip} bg-slate-500/20 light:bg-slate-200 text-slate-300 light:text-slate-700`}>
                 ⏱ {parsed.durationMin} min
               </span>
             )}
             {parsed.priority && (
-              <span className={`${chip} bg-rose-500/20 text-rose-300`}>
+              <span className={`${chip} bg-rose-500/20 light:bg-rose-100 text-rose-300 light:text-rose-600`}>
                 !prioridad {parsed.priority}
               </span>
             )}
             {parsed.importance && (
-              <span className={`${chip} bg-rose-500/20 text-rose-300`}>
+              <span className={`${chip} bg-rose-500/20 light:bg-rose-100 text-rose-300 light:text-rose-600`}>
                 !importancia {parsed.importance}
               </span>
             )}
@@ -137,7 +137,7 @@ export default function CaptureModal() {
                 type="button"
                 disabled={improving}
                 onClick={() => void handleImprove()}
-                className="chip bg-sky-500/20 text-sky-300 hover:bg-sky-500/30 cursor-pointer"
+                className="chip bg-sky-500/20 light:bg-sky-100 text-sky-300 light:text-sky-600 hover:bg-sky-500/30 hover:light:bg-sky-100 cursor-pointer"
                 title="Pide al LLM una segunda opinión para normalizar la captura"
               >
                 {improving ? "✨ Mejorando..." : "✨ Mejorar con IA"}
