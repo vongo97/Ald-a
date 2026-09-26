@@ -118,7 +118,9 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                       placeholder="Notas adicionales..."
                     />
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  {/* 2 columnas en móvil: con 3, cada una quedaba en 81.6px y
+                      el input de fecha se cortaba mostrando solo "26/09/". */}
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     <div>
                       <label className="mb-0.5 block text-slate-400 light:text-slate-500">Fecha</label>
                       <input
@@ -195,7 +197,12 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                   ))}
                 </ul>
               )}
-              <div className="flex gap-2">
+              {/* flex-wrap: con nowrap los 4 hijos se estrujaban en pantallas
+                  de 390px (el input quedaba en 55px mostrando solo "Añà" y los
+                  botones saltaban a 4 líneas con 58px de alto). En móvil el
+                  input ocupa su propia línea y los 3 botones caben en la
+                  siguiente; desde sm comparten fila como antes. */}
+              <div className="flex flex-wrap gap-2">
                 <input
                   value={subtaskText}
                   onChange={(e) => setSubtaskText(e.target.value)}
@@ -206,7 +213,7 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                     }
                   }}
                   placeholder="Añadir subtarea + Enter"
-                  className="input py-1 text-xs"
+                  className="input w-full py-1 text-xs sm:w-auto sm:flex-1"
                 />
                 <button
                   type="button"

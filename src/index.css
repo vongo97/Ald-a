@@ -71,3 +71,14 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar) transparent;
 }
+
+/* La navegación se desliza horizontalmente en móvil: la barra de scroll en
+   una nav estorba más de lo que informa, se recorre con el dedo. Sobrescribe
+   la regla global anterior (clase > *). */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
