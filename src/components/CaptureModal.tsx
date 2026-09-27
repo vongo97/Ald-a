@@ -73,7 +73,7 @@ export default function CaptureModal() {
   };
 
   const chip =
-    "chip bg-slate-700/70 light:bg-slate-100 text-slate-200 light:text-slate-800";
+    "chip bg-surface-hover text-primary";
 
   return (
     <div
@@ -126,7 +126,7 @@ export default function CaptureModal() {
               </span>
             ))}
             {parsed.durationMin && (
-              <span className={`${chip} bg-slate-500/20 light:bg-slate-200 text-slate-300 light:text-slate-700`}>
+              <span className={`${chip} bg-surface-hover text-primary`}>
                 ⏱ {parsed.durationMin} min
               </span>
             )}
@@ -151,7 +151,7 @@ export default function CaptureModal() {
                 {improving ? "✨ Mejorando..." : "✨ Mejorar con IA"}
               </button>
             )}
-            <span className="ml-auto text-slate-500">
+            <span className="ml-auto text-muted">
               Enter para crear · Esc para cerrar
             </span>
           </div>

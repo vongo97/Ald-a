@@ -10,7 +10,7 @@ function ToastItem({ id, message, undo }: { id: string; message: string; undo?: 
 
   return (
     <div className="card pointer-events-auto flex items-center gap-3 px-4 py-2.5 shadow-lg">
-      <span className="text-sm text-slate-200 light:text-slate-800">{message}</span>
+      <span className="text-sm text-primary">{message}</span>
       {undo && (
         <button
           type="button"
@@ -26,7 +26,7 @@ function ToastItem({ id, message, undo }: { id: string; message: string; undo?: 
       <button
         type="button"
         onClick={() => dismiss(id)}
-        className="ml-auto text-slate-500 hover:text-slate-300 hover:light:text-slate-700"
+        className="ml-auto text-muted hover:text-primary "
         aria-label="Cerrar"
       >
         ×

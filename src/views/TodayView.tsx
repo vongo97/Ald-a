@@ -32,7 +32,7 @@ export default function TodayView() {
     <section>
       <header className="mb-3 flex items-baseline justify-between">
         <h1 className="font-display text-2xl font-semibold">Hoy</h1>
-        <span className="text-xs text-slate-400 light:text-slate-500">
+        <span className="text-xs text-muted">
           {todays.length} tarea{todays.length === 1 ? "" : "s"}
         </span>
       </header>
@@ -87,8 +87,8 @@ export function EmptyState({ icon, title, hint }: { icon: string; title: string;
   return (
     <div className="card flex flex-col items-center gap-1 p-8 text-center">
       <span className="text-3xl">{icon}</span>
-      <p className="font-semibold text-slate-200 light:text-slate-800">{title}</p>
-      <p className="max-w-sm text-sm text-slate-400 light:text-slate-500">{hint}</p>
+      <p className="font-semibold text-primary">{title}</p>
+      <p className="max-w-sm text-sm text-muted">{hint}</p>
     </div>
   );
 }

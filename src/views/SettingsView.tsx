@@ -145,7 +145,7 @@ export default function SettingsView() {
         <h1 className="font-display text-2xl font-semibold">Ajustes</h1>
       </header>
 
-      <div className={`card mb-4 p-3 text-sm ${status === "active" ? "border-emerald-500/40 light:border-emerald-300 bg-emerald-500/10 light:bg-emerald-50 text-emerald-200 light:text-emerald-700" : "border-slate-600 light:border-slate-300 bg-slate-800/60 light:bg-white text-slate-300 light:text-slate-700"}`}>
+      <div className={`card mb-4 p-3 text-sm ${status === "active" ? "border-emerald-500/40 light:border-emerald-300 bg-emerald-500/10 light:bg-emerald-50 text-emerald-200 light:text-emerald-700" : "border-theme bg-surface text-primary"}`}>
         {status === "active"
           ? "✨ IA activa: desglose con LLM y planes sugeridos por el modelo."
           : "🧩 IA desactivada (modo local): las plantillas y scores funcionan sin red."}
@@ -160,7 +160,7 @@ export default function SettingsView() {
         }}
       >
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-400 light:text-slate-500">Proveedor</span>
+          <span className="mb-1 block text-muted">Proveedor</span>
           <select
             className="input"
             value={draft.provider}
@@ -177,7 +177,7 @@ export default function SettingsView() {
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-400 light:text-slate-500">
+          <span className="mb-1 block text-muted">
             Clave API {draft.provider === "gemini" && "(Obtén una gratis en aistudio.google.com)"}
           </span>
           <input
@@ -199,7 +199,7 @@ export default function SettingsView() {
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-400 light:text-slate-500">Modelo</span>
+          <span className="mb-1 block text-muted">Modelo</span>
           <div className="flex flex-col gap-2 sm:flex-row">
             <select
               className="input flex-1"
@@ -230,7 +230,7 @@ export default function SettingsView() {
         </label>
 
         <label className="block text-sm">
-          <span className="mb-1 block text-slate-400 light:text-slate-500">URL base (opcional, para proxys compatibles)</span>
+          <span className="mb-1 block text-muted">URL base (opcional, para proxys compatibles)</span>
           <input
             className="input"
             value={draft.baseUrl}
@@ -293,9 +293,9 @@ export default function SettingsView() {
         </div>
       </form>
 
-      <div className="mt-5 space-y-2 text-xs text-slate-400 light:text-slate-500">
+      <div className="mt-5 space-y-2 text-xs text-muted">
         <p>
-          💡 <span className="font-semibold text-slate-200 light:text-slate-800">Recomendación gratuita:</span> Google ofrece una capa gratuita muy generosa en{" "}
+          💡 <span className="font-semibold text-primary">Recomendación gratuita:</span> Google ofrece una capa gratuita muy generosa en{" "}
           <a
             href="https://aistudio.google.com/app/apikey"
             target="_blank"
@@ -306,17 +306,17 @@ export default function SettingsView() {
           </a>{" "}
           para el modelo <code>gemini-3.8-flash</code> sin requerir tarjeta de crédito para pruebas estándar.
         </p>
-        <p className="text-slate-500">
+        <p className="text-muted">
           Otras opciones: seleccionando «OpenAI compatible» puedes conectar servicios como{" "}
-          <span className="text-slate-300 light:text-slate-700">OpenRouter</span> o{" "}
-          <span className="text-slate-300 light:text-slate-700">Ollama</span> para correr modelos 100% locales y privados en tu máquina usando el campo de URL base.
+          <span className="text-primary">OpenRouter</span> o{" "}
+          <span className="text-primary">Ollama</span> para correr modelos 100% locales y privados en tu máquina usando el campo de URL base.
         </p>
       </div>
 
       {/* ── Sección Apariencia ── */}
-      <div className="mt-6 rounded-xl border border-slate-700/50 light:border-slate-200 bg-slate-800/40 light:bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200 light:text-slate-800">🎨 Apariencia</h2>
-        <p className="mb-3 text-xs text-slate-500">
+      <div className="mt-6 rounded-xl border border-theme bg-surface p-4">
+        <h2 className="mb-3 text-sm font-semibold text-primary">🎨 Apariencia</h2>
+        <p className="mb-3 text-xs text-muted">
           Elige la identidad visual de la app. Cada tema cambia colores, tipografía y efectos.
         </p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Tema visual">
@@ -330,7 +330,7 @@ export default function SettingsView() {
               className={`flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-all duration-150 ${
                 theme === t.id
                   ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-md"
-                  : "border-slate-700/50 light:border-slate-200 hover:border-slate-500 light:hover:border-slate-400"
+                  : "border-theme hover:border-theme "
               }`}
             >
               {/* Preview de colores */}
@@ -340,14 +340,14 @@ export default function SettingsView() {
                   style={{ backgroundColor: t.swatch }}
                   aria-hidden
                 />
-                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 light:text-slate-500">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
                   {t.mode === "dark" ? "🌙" : "☀️"} {t.mode}
                 </span>
               </span>
-              <span className="text-sm font-semibold text-slate-200 light:text-slate-800">
+              <span className="text-sm font-semibold text-primary">
                 {t.label}
               </span>
-              <span className="text-[11px] leading-tight text-slate-500 light:text-slate-400">
+              <span className="text-[11px] leading-tight text-muted">
                 {t.blurb}
               </span>
             </button>
@@ -356,15 +356,15 @@ export default function SettingsView() {
       </div>
 
       {/* ── Sección App & Notificaciones ── */}
-      <div className="mt-6 rounded-xl border border-slate-700/50 light:border-slate-200 bg-slate-800/40 light:bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200 light:text-slate-800">📲 App &amp; Notificaciones</h2>
+      <div className="mt-6 rounded-xl border border-theme bg-surface p-4">
+        <h2 className="mb-3 text-sm font-semibold text-primary">📲 App &amp; Notificaciones</h2>
         <div className="space-y-3">
 
           {/* Instalar como app */}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-medium text-slate-300 light:text-slate-700">Instalar como app de escritorio</p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs font-medium text-primary">Instalar como app de escritorio</p>
+              <p className="text-xs text-muted">
                 {installed
                   ? "✅ App instalada. Puedes configurarla para abrirse al iniciar Windows."
                   : "Instala la app para usarla sin el navegador y configurar inicio automático con Windows."}
@@ -374,7 +374,7 @@ export default function SettingsView() {
               <button
                 type="button"
                 className={`btn-ghost shrink-0 text-xs ${
-                  canInstall ? "text-sky-400 light:text-sky-600" : "cursor-not-allowed text-slate-500"
+                  canInstall ? "text-sky-400 light:text-sky-600" : "cursor-not-allowed text-muted"
                 }`}
                 disabled={!canInstall}
                 onClick={() => void install()}
@@ -388,8 +388,8 @@ export default function SettingsView() {
           {/* Notificaciones */}
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-medium text-slate-300 light:text-slate-700">Notificaciones de bloques de tiempo</p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs font-medium text-primary">Notificaciones de bloques de tiempo</p>
+              <p className="text-xs text-muted">
                 {notifStatus === "granted"
                   ? "✅ Activadas. Recibirás alertas 5 min antes y al inicio de cada bloque."
                   : notifStatus === "denied"
@@ -418,12 +418,12 @@ export default function SettingsView() {
       </div>
 
       {/* ── Sección Sincronización & Backup ── */}
-      <div className="mt-6 rounded-xl border border-slate-700/50 light:border-slate-200 bg-slate-800/40 light:bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-200 light:text-slate-800">💾 Backup &amp; Sincronización</h2>
+      <div className="mt-6 rounded-xl border border-theme bg-surface p-4">
+        <h2 className="mb-3 text-sm font-semibold text-primary">💾 Backup &amp; Sincronización</h2>
         
         {/* Backup Local JSON */}
         <div className="mb-6 space-y-2">
-          <p className="text-xs font-medium text-slate-300 light:text-slate-700">Backup Local (Sin nube)</p>
+          <p className="text-xs font-medium text-primary">Backup Local (Sin nube)</p>
           <div className="flex gap-2">
             <button type="button" className="btn-ghost text-xs" onClick={() => void exportDataToJSON()}>
               ⬇️ Exportar JSON
@@ -450,8 +450,8 @@ export default function SettingsView() {
         </div>
 
         {/* Sincronización en la Nube (Automática) */}
-        <div className="space-y-3 pt-4 border-t border-slate-700/60 light:border-slate-200 mt-4">
-          <p className="text-xs font-medium text-slate-300 light:text-slate-700">Nube & Multi-dispositivo</p>
+        <div className="space-y-3 pt-4 border-t border-theme mt-4">
+          <p className="text-xs font-medium text-primary">Nube & Multi-dispositivo</p>
           
           {session ? (
             <div className="rounded-lg bg-emerald-500/10 light:bg-emerald-50 p-3 border border-emerald-500/20 light:border-emerald-200">
@@ -472,8 +472,8 @@ export default function SettingsView() {
               </button>
             </div>
           ) : (
-            <div className="rounded-lg bg-slate-900/50 light:bg-slate-100 p-3">
-              <p className="text-xs text-slate-400 light:text-slate-500 mb-3">
+            <div className="rounded-lg bg-surface-hover p-3">
+              <p className="text-xs text-muted mb-3">
                 Conecta con Google para respaldar tus tareas automáticamente y compartirlas entre tus dispositivos.
               </p>
               <div className="flex flex-col gap-2">
@@ -481,7 +481,7 @@ export default function SettingsView() {
                     contraseñas que guardar ni rate limits de Supabase. */}
                 <button
                   type="button"
-                  className="btn-ghost mt-2 flex items-center justify-center gap-2 border border-slate-700/50 light:border-slate-200 hover:bg-slate-800 hover:light:bg-slate-100"
+                  className="btn-ghost mt-2 flex items-center justify-center gap-2 border border-theme hover:bg-surface-hover"
                   disabled={authLoading}
                   onClick={async () => {
                     setAuthLoading(true);

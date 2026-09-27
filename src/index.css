@@ -315,6 +315,29 @@ body {
   border-bottom: 1px solid var(--glass-border);
 }
 
+/* ── Utilidades de tema (reemplazan colores hardcodeados) ── */
+.text-primary {
+  color: var(--fg);
+}
+.text-muted {
+  color: var(--fg-muted);
+}
+.text-accent {
+  color: var(--accent);
+}
+.bg-surface {
+  background: var(--card-bg);
+}
+.bg-surface-hover {
+  background: var(--card-hover);
+}
+.border-theme {
+  border-color: var(--card-border);
+}
+.bg-accent-soft {
+  background: var(--accent-soft);
+}
+
 @layer components {
   .card {
     @apply border transition-all duration-200;

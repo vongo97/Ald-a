@@ -11,11 +11,11 @@ function relativeTime(ms: number): string {
 }
 
 const DOT: Record<string, { color: string; label: string }> = {
-  idle:    { color: "bg-slate-400",     label: "Sin sincronizar" },
+  idle:    { color: "bg-surface-hover",     label: "Sin sincronizar" },
   syncing: { color: "bg-amber-400 animate-pulse", label: "Sincronizando…" },
   synced:  { color: "bg-emerald-400",   label: "Sincronizado" },
   error:   { color: "bg-red-400",       label: "Error de sincronización" },
-  offline: { color: "bg-slate-500",     label: "Sin conexión" },
+  offline: { color: "bg-surface-hover",     label: "Sin conexión" },
 };
 
 /**
@@ -47,7 +47,7 @@ export default function SyncIndicator() {
 
   return (
     <span
-      className="ml-auto flex shrink-0 items-center gap-1.5 pr-1 text-xs text-slate-400 light:text-slate-500"
+      className="ml-auto flex shrink-0 items-center gap-1.5 pr-1 text-xs text-muted"
       title={tooltip}
       aria-label={tooltip}
       role="status"

@@ -82,8 +82,8 @@ export default function ProjectsView() {
       )}
 
       {selected && (
-        <div className="mt-5 rounded-xl border border-slate-700/60 light:border-slate-200 bg-slate-900/40 light:bg-white p-4">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/60 light:border-slate-200 pb-3">
+        <div className="mt-5 rounded-xl border border-theme bg-surface p-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-theme pb-3">
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -119,9 +119,9 @@ export default function ProjectsView() {
             </button>
           </div>
 
-          <h2 className="mb-2 text-sm font-semibold text-slate-400 light:text-slate-500">Tareas de «{selected.name}»</h2>
+          <h2 className="mb-2 text-sm font-semibold text-muted">Tareas de «{selected.name}»</h2>
           {(tasksByProject.get(selected.id) ?? []).length === 0 ? (
-            <p className="py-2 text-xs text-slate-500">No hay tareas en este proyecto.</p>
+            <p className="py-2 text-xs text-muted">No hay tareas en este proyecto.</p>
           ) : (
             <ul className="space-y-2">
               {sortBySuggested(tasksByProject.get(selected.id) ?? []).map((t) => (
@@ -132,7 +132,7 @@ export default function ProjectsView() {
             </ul>
           )}
 
-          <div className="mt-4 pt-3 border-t border-slate-700/60 light:border-slate-200">
+          <div className="mt-4 pt-3 border-t border-theme">
             <button
               type="button"
               className="btn-ghost text-xs text-sky-400 light:text-sky-600 w-full justify-center"

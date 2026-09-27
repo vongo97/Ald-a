@@ -77,7 +77,7 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
 
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
             {task.dueDate && (
-              <span className={`chip ${overdue ? "bg-rose-500/20 light:bg-rose-100 text-rose-300 light:text-rose-600" : "bg-slate-700/70 light:bg-slate-100 text-slate-300 light:text-slate-700"}`}>
+              <span className={`chip ${overdue ? "bg-rose-500/20 light:bg-rose-100 text-rose-300 light:text-rose-600" : "bg-surface-hover text-primary"}`}>
                 📅 {formatLocalDate(parseISODate(task.dueDate))}
                 {task.dueTime ? ` · ${task.dueTime}` : ""}
               </span>
@@ -91,7 +91,7 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
             {task.labels.map((l) => (
               <span key={l} className="chip bg-amber-500/20 light:bg-amber-100 text-amber-300 light:text-amber-700">@{l}</span>
             ))}
-            {task.durationMin && <span className="chip bg-slate-700/70 light:bg-slate-100 text-slate-300 light:text-slate-700">⏱ {task.durationMin}m</span>}
+            {task.durationMin && <span className="chip bg-surface-hover text-primary">⏱ {task.durationMin}m</span>}
             {score && (
               <span
                 className="chip bg-sky-500/15 light:bg-sky-50 text-sky-300 light:text-sky-600 cursor-help"
@@ -103,7 +103,7 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
           </div>
 
           {expanded && (
-            <div className="mt-2 border-t border-slate-700/60 light:border-slate-200 pt-2">
+            <div className="mt-2 border-t border-theme pt-2">
               {score && score.reasons.length > 0 && (
                 <div className="mb-2 rounded bg-sky-950/40 light:bg-sky-50 border border-sky-500/30 light:border-sky-200 px-2 py-1 text-[11px] text-sky-300 light:text-sky-600">
                   <span className="font-semibold">Motivo del score (★ {score.score}):</span>{" "}
@@ -111,9 +111,9 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                 </div>
               )}
               {editing ? (
-                <div className="mb-3 space-y-2 rounded-lg bg-slate-900/60 light:bg-white p-3 text-xs">
+                <div className="mb-3 space-y-2 rounded-lg bg-surface p-3 text-xs">
                   <div>
-                    <label className="mb-0.5 block text-slate-400 light:text-slate-500">Título</label>
+                    <label className="mb-0.5 block text-muted">Título</label>
                     <input
                       type="text"
                       value={editTitle}
@@ -122,7 +122,7 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                     />
                   </div>
                   <div>
-                    <label className="mb-0.5 block text-slate-400 light:text-slate-500">Notas</label>
+                    <label className="mb-0.5 block text-muted">Notas</label>
                     <textarea
                       value={editNotes}
                       onChange={(e) => setEditNotes(e.target.value)}
@@ -135,7 +135,7 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                       el input de fecha se cortaba mostrando solo "26/09/". */}
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     <div>
-                      <label className="mb-0.5 block text-slate-400 light:text-slate-500">Fecha</label>
+                      <label className="mb-0.5 block text-muted">Fecha</label>
                       <input
                         type="date"
                         value={editDate}
@@ -144,7 +144,7 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                       />
                     </div>
                     <div>
-                      <label className="mb-0.5 block text-slate-400 light:text-slate-500">Hora</label>
+                      <label className="mb-0.5 block text-muted">Hora</label>
                       <input
                         type="time"
                         value={editTime}
@@ -153,7 +153,7 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                       />
                     </div>
                     <div>
-                      <label className="mb-0.5 block text-slate-400 light:text-slate-500">Duración (m)</label>
+                      <label className="mb-0.5 block text-muted">Duración (m)</label>
                       <input
                         type="number"
                         min="5"
@@ -193,7 +193,7 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                   </div>
                 </div>
               ) : (
-                task.notes && <p className="mb-2 text-xs text-slate-400 light:text-slate-500">{task.notes}</p>
+                task.notes && <p className="mb-2 text-xs text-muted">{task.notes}</p>
               )}
               {subtasks && subtasks.length > 0 && (
                 <ul className="mb-2 space-y-1">
@@ -202,10 +202,10 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                       <button
                         type="button"
                         onClick={() => void toggleWithUndo(st, toggleTask, pushToast)}
-                        className={`h-3.5 w-3.5 rounded-full border ${st.status === "done" ? "border-emerald-400 light:border-emerald-300 bg-emerald-400" : "border-slate-500 light:border-slate-300"}`}
+                        className={`h-3.5 w-3.5 rounded-full border ${st.status === "done" ? "border-emerald-400 light:border-emerald-300 bg-emerald-400" : "border-theme"}`}
                         aria-label="Completar subtarea"
                       />
-                      <span className={st.status === "done" ? "line-through text-slate-500" : ""}>{st.title}</span>
+                      <span className={st.status === "done" ? "line-through text-muted" : ""}>{st.title}</span>
                     </li>
                   ))}
                 </ul>

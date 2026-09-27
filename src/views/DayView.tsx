@@ -101,7 +101,7 @@ export default function DayView() {
       <header className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h1 className="font-display text-2xl font-semibold">Día</h1>
-          <span className="text-xs text-slate-400 light:text-slate-500">
+          <span className="text-xs text-muted">
             {selected ? "Elige la hora de inicio en la rejilla…" : "Selecciona una tarea y haz clic en la rejilla"}
           </span>
         </div>
@@ -118,9 +118,9 @@ export default function DayView() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
         <div className="md:col-span-2">
-          <h2 className="mb-2 text-sm font-semibold text-slate-400 light:text-slate-500">Sin bloquear</h2>
+          <h2 className="mb-2 text-sm font-semibold text-muted">Sin bloquear</h2>
           {unscheduled.length === 0 ? (
-            <p className="text-xs text-slate-500">Todo bloqueado 🎉</p>
+            <p className="text-xs text-muted">Todo bloqueado 🎉</p>
           ) : (
             <ul className="space-y-2">
               {unscheduled.map((t) => (
@@ -131,11 +131,11 @@ export default function DayView() {
                     className={`block w-full rounded-xl border px-3 py-2 text-left text-sm transition-colors ${
                       selected === t.id
                         ? "border-sky-400 light:border-sky-500 bg-sky-500/10 light:bg-sky-50 text-sky-200 light:text-sky-700"
-                        : "border-slate-700/60 light:border-slate-200 bg-slate-800/60 light:bg-white text-slate-200 light:text-slate-800 hover:border-slate-500 hover:light:border-slate-300"
+                        : "border-theme bg-surface text-primary hover:opacity-75"
                     }`}
                   >
                     {t.title}
-                    {t.durationMin ? <span className="ml-2 text-xs text-slate-500">⏱ {t.durationMin}m</span> : null}
+                    {t.durationMin ? <span className="ml-2 text-xs text-muted">⏱ {t.durationMin}m</span> : null}
                   </button>
                 </li>
               ))}
@@ -144,9 +144,9 @@ export default function DayView() {
         </div>
 
         <div className="md:col-span-3">
-          <h2 className="mb-2 text-sm font-semibold text-slate-400 light:text-slate-500">Rejilla del día</h2>
+          <h2 className="mb-2 text-sm font-semibold text-muted">Rejilla del día</h2>
           <div
-            className="relative rounded-xl border border-slate-700/60 light:border-slate-200 bg-slate-900/40 light:bg-white"
+            className="relative rounded-xl border border-theme bg-surface"
             style={{ height: (END_H - START_H) * PX_PER_H }}
             onClick={onGridClick}
             role="presentation"
@@ -154,10 +154,10 @@ export default function DayView() {
             {Array.from({ length: END_H - START_H }, (_, i) => (
               <div
                 key={i}
-                className="absolute inset-x-0 border-t border-slate-700/40 light:border-slate-200 text-xs text-slate-500"
+                className="absolute inset-x-0 border-t border-theme/40  text-xs text-muted"
                 style={{ top: i * PX_PER_H }}
               >
-                <span className="absolute left-1 -top-2 bg-slate-900/80 light:bg-white px-1">{String(START_H + i).padStart(2, "0")}:00</span>
+                <span className="absolute left-1 -top-2 bg-surface px-1">{String(START_H + i).padStart(2, "0")}:00</span>
               </div>
             ))}
             {scheduled.map((t) => {
@@ -183,13 +183,13 @@ export default function DayView() {
             })}
           </div>
           {scheduled.length > 0 && (
-            <ul className="mt-3 space-y-1 text-xs text-slate-400 light:text-slate-500">
+            <ul className="mt-3 space-y-1 text-xs text-muted">
               {scheduled.map((t) => (
                 <li key={t.id} className="flex items-center justify-between gap-2">
                   <span className="truncate">• {t.title}</span>
                   <button
                     type="button"
-                    className="text-slate-500 hover:text-rose-300 hover:light:text-rose-600"
+                    className="text-muted hover:text-rose-300 hover:light:text-rose-600"
                     onClick={() => void updateTask(t.id, { timeBlock: undefined })}
                   >
                     quitar
