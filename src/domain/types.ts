@@ -58,6 +58,7 @@ export type ViewId =
   | "proyectos"
   | "etiquetas"
   | "revision"
+  | "papelera"
   | "buscar"
   | "ajustes";
 

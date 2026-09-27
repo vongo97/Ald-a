@@ -1,5 +1,7 @@
 import { useStore } from "@/store/useStore";
 import SyncIndicator from "@/components/SyncIndicator";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "@/store/db";
 import type { ViewId } from "@/domain/types";
 
 /**
@@ -19,6 +21,7 @@ const ITEMS: { id: ViewId; icon: string; label: string }[] = [
   { id: "proyectos", icon: "📁", label: "Proyectos" },
   { id: "etiquetas", icon: "🏷️", label: "Etiquetas" },
   { id: "revision", icon: "📊", label: "Revisión" },
+  { id: "papelera", icon: "🗑️", label: "Papelera" },
   { id: "buscar", icon: "🔍", label: "Buscar" },
   { id: "ajustes", icon: "⚙️", label: "Ajustes" },
 ];
@@ -27,6 +30,8 @@ export default function Dock() {
   const view = useStore((s) => s.view);
   const setView = useStore((s) => s.setView);
   const openCapture = useStore((s) => s.openCapture);
+  // Contador de borrados: el badge descubre la Papelera (nada se pierde solo).
+  const trashCount = useLiveQuery(() => db.tasks.filter((t) => !!t.deletedAt).count(), [], 0);
 
   return (
     <>
@@ -44,7 +49,7 @@ export default function Dock() {
             key={it.id}
             type="button"
             onClick={() => setView(it.id)}
-            className={`dock-item group relative flex flex-col items-center gap-0.5 rounded-xl px-1.5 py-1.5 transition-all duration-200 ease-out sm:px-2 ${
+            className={`dock-item group relative flex flex-col items-center gap-0.5 rounded-xl px-1 py-1.5 transition-all duration-200 ease-out sm:px-2 ${
               view === it.id
                 ? "text-[var(--accent)]"
                 : "text-[var(--fg)] opacity-60 hover:opacity-100"
@@ -56,6 +61,15 @@ export default function Dock() {
             <span className="text-lg leading-none sm:text-xl" aria-hidden>
               {it.icon}
             </span>
+            {/* Badge de la Papelera: cuánto hay borrado ahora mismo */}
+            {it.id === "papelera" && trashCount > 0 && (
+              <span
+                className="absolute -top-0.5 right-0 min-w-3.5 rounded-full bg-rose-500 px-1 text-center text-[9px] font-semibold leading-3.5 text-white"
+                aria-hidden
+              >
+                {trashCount > 99 ? "99+" : trashCount}
+              </span>
+            )}
             {/* Etiqueta: solo visible en desktop (sm+) o al hacer hover */}
             <span className="hidden text-[10px] font-medium leading-tight sm:block">
               {it.label}

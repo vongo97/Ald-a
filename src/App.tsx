@@ -12,6 +12,7 @@ import InboxView from "@/views/InboxView";
 import ProjectsView from "@/views/ProjectsView";
 import LabelsView from "@/views/LabelsView";
 import ReviewView from "@/views/ReviewView";
+import PapeleraView from "@/views/PapeleraView";
 import SearchView from "@/views/SearchView";
 import SettingsView from "@/views/SettingsView";
 import OverdueRescheduleModal from "@/components/OverdueRescheduleModal";
@@ -188,6 +189,7 @@ function AppInner() {
             {view === "proyectos" && <ProjectsView />}
             {view === "etiquetas" && <LabelsView />}
             {view === "revision" && <ReviewView />}
+            {view === "papelera" && <PapeleraView />}
             {view === "buscar" && <SearchView />}
             {view === "ajustes" && <SettingsView />}
           </motion.div>

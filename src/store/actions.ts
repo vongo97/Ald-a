@@ -5,6 +5,7 @@ import { nextOccurrence } from "@/domain/recurrence";
 import { toISODate, parseISODate } from "@/domain/dateutils";
 import { autoPushTask, autoPushProject, autoPushTasks, autoPushDeleteTask, autoPushDeleteProject, autoRestoreTasks } from "./sync";
 import { randomColor } from "@/domain/color";
+import { restoreSet } from "@/domain/trash";
 
 export async function createProject(name: string, color: string): Promise<Project> {
   const p: Project = { id: newId(), name, color };
@@ -140,19 +141,21 @@ export async function deleteTask(id: string): Promise<void> {
 }
 
 /**
- * Deshace un borrado: restaura la tarea y TODA su descendencia borrada
- * (la cascada de `deleteTask` se deshace entera).
+ * Deshace un borrado de forma SELECTIVA: restaura la tarea, sus ancestros
+ * borrados (para que sea visible bajo un padre vivo) y su descendencia
+ * borrada (la cascada de `deleteTask` se deshace entera). Nunca toca
+ * hermanas ni nada fuera de esa rama.
  *
  * Lo local se limpia en una transacción (quito `deletedAt` y las tumbas
  * locales) y luego se sincroniza: sin borrar las tumbas remotas y subir
  * `deleted_at: null`, el siguiente pull volvería a borrarlo todo.
+ *
+ * Devuelve cuántas tareas ha restaurado (para el toast de la Papelera).
  */
-export async function restoreTask(id: string): Promise<void> {
-  const root = await db.tasks.get(id);
-  if (!root) return;
-
-  const toRestore = [root, ...(await collectDescendants(id))].filter((t) => t.deletedAt);
-  if (toRestore.length === 0) return;
+export async function restoreTask(id: string): Promise<number> {
+  const all = await db.tasks.toArray();
+  const toRestore = restoreSet(all, id);
+  if (toRestore.length === 0) return 0;
 
   const now = stampNow();
   const restored: Task[] = [];
@@ -166,6 +169,7 @@ export async function restoreTask(id: string): Promise<void> {
   });
 
   void autoRestoreTasks(restored);
+  return restored.length;
 }
 
 export async function addSubtask(parent: Task, title: string): Promise<Task> {

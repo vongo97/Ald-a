@@ -3,15 +3,14 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/store/db";
 import { sortBySuggested } from "@/domain/priority";
 import { dayCapacity, formatMinutes } from "@/domain/capacity";
-import { topmostDeleted } from "@/domain/trash";
 import { useOverdue } from "@/store/useOverdue";
 import { useStore } from "@/store/useStore";
-import { restoreTask } from "@/store/actions";
 import SortableTaskList from "@/components/SortableTaskList";
 import { toISODate, startOfDay } from "@/domain/dateutils";
 
 export default function TodayView() {
   const pushToast = useStore((s) => s.pushToast);
+  const setView = useStore((s) => s.setView);
 
   const allTasks = useLiveQuery(() => db.tasks.toArray(), [], []);
   const projects = useLiveQuery(() => db.projects.toArray(), [], []);
@@ -25,24 +24,13 @@ export default function TodayView() {
   }, [allTasks, today]);
 
   // Borradas de hoy (soft delete): existen, pero la vista las oculta.
-  // El aviso las saca a la luz y permite restaurarlas sin salir de aquí.
+  // El aviso las saca a la luz y lleva a la Papelera: ahí se restauran
+  // una a una (nada de «restaurar todo»).
   const deletedToday = useMemo(
     () =>
       (allTasks ?? []).filter((t) => t.dueDate === today && t.status === "todo" && !!t.deletedAt),
     [allTasks, today],
   );
-
-  const restoreDeletedToday = () => {
-    // Restauro las RAÍCES de cada rama (subir al ancestro borrado más alto);
-    // restoreTask recupera toda la rama de una vez.
-    const rootIds = new Set(deletedToday.map((t) => topmostDeleted(allTasks ?? [], t).id));
-    void (async () => {
-      for (const rootId of rootIds) await restoreTask(rootId);
-      pushToast(
-        `${deletedToday.length} tarea${deletedToday.length === 1 ? "" : "s"} de hoy restaurada${deletedToday.length === 1 ? "" : "s"}`,
-      );
-    })();
-  };
 
   const capacity = useMemo(() => dayCapacity(allTasks ?? [], today), [allTasks, today]);
   // La misma fuente que usa el modal: una sola definición de "vencida".
@@ -97,13 +85,13 @@ export default function TodayView() {
           <p className="text-sm text-muted">
             🗑️ {deletedToday.length} tarea{deletedToday.length === 1 ? "" : "s"} de hoy en la papelera: no han
             desaparecido, están borradas.
-            {todays.length === 0 && " Restáuralas y el día vuelve a llenarse."}
+            {todays.length === 0 && " Restáuralas desde ahí y el día vuelve a llenarse."}
           </p>
           <div className="mt-2 flex gap-2">
-            <button type="button" className="btn-primary text-xs" onClick={restoreDeletedToday}>
-              ♻️ Restaurar{todays.length === 0 ? " todo" : ""}
+            <button type="button" className="btn-primary text-xs" onClick={() => setView("papelera")}>
+              🗑️ Ver papelera
             </button>
-            <span className="self-center text-xs text-muted">también en Revisión → 🗑️ Papelera</span>
+            <span className="self-center text-xs text-muted">restaúralas una a una</span>
           </div>
         </div>
       )}

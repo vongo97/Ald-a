@@ -4,14 +4,9 @@ import { db } from "@/store/db";
 import TaskItem from "@/components/TaskItem";
 import { overdueTasks } from "@/domain/deviation";
 import { dayCapacity, formatMinutes } from "@/domain/capacity";
-import { deletedRoots } from "@/domain/trash";
 import { addDays, toISODate, startOfDay } from "@/domain/dateutils";
-import { restoreTask } from "@/store/actions";
-import { useStore } from "@/store/useStore";
-import type { Task } from "@/domain/types";
 
 export default function ReviewView() {
-  const pushToast = useStore((s) => s.pushToast);
   const allTasks = useLiveQuery(() => db.tasks.toArray(), [], []);
 
   const today = toISODate(startOfDay(new Date()));
@@ -32,42 +27,6 @@ export default function ReviewView() {
     }
     return { done, overdue, noDate, weekLoad };
   }, [allTasks, today, in7]);
-
-  // 🗑️ Papelera: borradas (soft delete), agrupadas por rama y con su recuento
-  // de subtareas borradas para que restaurar una raíz se entienda de un vistazo.
-  const trash = useMemo(() => {
-    const all = allTasks ?? [];
-    const kids = new Map<string, Task[]>();
-    for (const t of all) {
-      if (!t.parentId) continue;
-      const arr = kids.get(t.parentId);
-      if (arr) arr.push(t);
-      else kids.set(t.parentId, [t]);
-    }
-    const countDeletedDesc = (id: string): number => {
-      let n = 0;
-      for (const c of kids.get(id) ?? []) {
-        if (c.deletedAt) n += 1 + countDeletedDesc(c.id);
-      }
-      return n;
-    };
-    return deletedRoots(all)
-      .sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""))
-      .map((task) => ({ task, subtasks: countDeletedDesc(task.id) }));
-  }, [allTasks]);
-
-  const restoreOne = (id: string) => {
-    void restoreTask(id).then(() => pushToast("Tarea restaurada"));
-  };
-
-  const restoreAll = () => {
-    void (async () => {
-      for (const { task } of trash) await restoreTask(task.id);
-      pushToast(
-        `${trash.length} elemento${trash.length === 1 ? "" : "s"} restaurado${trash.length === 1 ? "" : "s"}`,
-      );
-    })();
-  };
 
   if (!allTasks) return null;
 
@@ -134,45 +93,6 @@ export default function ReviewView() {
             {data.noDate.map((t) => (
               <li key={t.id}>
                 <TaskItem task={t} />
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      <div className="mb-2 mt-6 flex items-baseline justify-between gap-3">
-        <h2 className="text-sm font-semibold text-muted">🗑️ Papelera</h2>
-        {trash.length > 1 && (
-          <button type="button" className="btn-ghost text-xs" onClick={restoreAll}>
-            ♻️ Restaurar todo
-          </button>
-        )}
-      </div>
-      {trash.length === 0 ? (
-        <p className="text-xs text-muted">Vacía: no has borrado nada (o ya lo restauraste).</p>
-      ) : (
-        <>
-          <p className="mb-2 text-xs text-muted">
-            Borradas con borrado suave: siguen aquí y se pueden recuperar. Restaurar una rama devuelve también sus
-            subtareas.
-          </p>
-          <ul className="space-y-2">
-            {trash.map(({ task, subtasks }) => (
-              <li key={task.id} className="card flex items-center gap-3 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-primary">{task.title}</p>
-                  <p className="text-xs text-muted">
-                    borrada {(task.deletedAt ?? "").slice(0, 10)}
-                    {subtasks > 0 ? ` · +${subtasks} subtarea${subtasks === 1 ? "" : "s"}` : ""}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="btn-primary shrink-0 text-xs"
-                  onClick={() => restoreOne(task.id)}
-                >
-                  ♻️ Restaurar
-                </button>
               </li>
             ))}
           </ul>
