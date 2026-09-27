@@ -129,7 +129,8 @@ function needsPush(local: SyncRecord, remoteTime: number, remoteKnown: boolean):
  * Es el paso PREVIO al pull, y el que garantiza que no se pierda trabajo
  * hecho sin conexión.
  */
-export async function pushLocalChanges(): Promise<{ tasks: number; projects: number }> {
+/** Solo se usa dentro de `pullAndSyncFromSupabase`: no se exporta. */
+async function pushLocalChanges(): Promise<{ tasks: number; projects: number }> {
   const userId = await sessionUserId();
   if (!userId) return { tasks: 0, projects: 0 };
 

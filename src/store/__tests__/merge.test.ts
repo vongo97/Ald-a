@@ -68,4 +68,22 @@ describe("mergeDecision", () => {
   it("si falta el reloj en los dos lados, se queda lo que había", () => {
     expect(mergeDecision({}, {})).toBe("keep-local");
   });
+
+  // ── Borrado suave (tumbas) ─────────────────────────────────────────────
+  it("el borrado remoto se aplica aunque lo local siga vivo", () => {
+    expect(mergeDecision({ updatedAt: L }, { updatedAt: R, deletedAt: R })).toBe("take-remote");
+  });
+
+  it("un borrado local no se revierte con una copia viva de la nube", () => {
+    expect(mergeDecision({ updatedAt: L, deletedAt: L }, { updatedAt: R })).toBe("keep-local");
+  });
+
+  it("ambos borrados → gana el más reciente", () => {
+    expect(mergeDecision({ updatedAt: L, deletedAt: L }, { updatedAt: R, deletedAt: R })).toBe(
+      "take-remote",
+    );
+    expect(mergeDecision({ updatedAt: R, deletedAt: R }, { updatedAt: L, deletedAt: L })).toBe(
+      "keep-local",
+    );
+  });
 });

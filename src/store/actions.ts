@@ -1,6 +1,6 @@
 import { db, newId, stampNow } from "./db";
 import type { ParsedCapture } from "@/parsers/capture";
-import type { Priority, Project, Task } from "@/domain/types";
+import type { Project, Task } from "@/domain/types";
 import { nextOccurrence } from "@/domain/recurrence";
 import { toISODate, parseISODate } from "@/domain/dateutils";
 import { autoPushTask, autoPushProject, autoPushTasks, autoPushDeleteTask, autoPushDeleteProject } from "./sync";
