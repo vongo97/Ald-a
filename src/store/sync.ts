@@ -217,19 +217,29 @@ export async function autoPushTask(task: Task): Promise<void> {
 /** Sube la tumba de una tarea a Supabase (señal de borrado). */
 export async function autoPushDeleteTask(id: string): Promise<void> {
   const userId = await sessionUserId();
-  if (!userId) return;
+  console.log("[autoPushDeleteTask] userId:", userId, "taskId:", id);
+  if (!userId) {
+    console.warn("[autoPushDeleteTask] No hay sesión, abortando");
+    return;
+  }
   const now = stampNow();
   const { error } = await supabase.from("tombstones").upsert({ id, kind: "tasks", updated_at: now });
   if (error) console.error("AutoSync delete error (Task tombstone):", error);
+  else console.log("[autoPushDeleteTask] Tombstone subida OK");
 }
 
 /** Sube la tumba de un proyecto a Supabase (señal de borrado). */
 export async function autoPushDeleteProject(id: string): Promise<void> {
   const userId = await sessionUserId();
-  if (!userId) return;
+  console.log("[autoPushDeleteProject] userId:", userId, "projectId:", id);
+  if (!userId) {
+    console.warn("[autoPushDeleteProject] No hay sesión, abortando");
+    return;
+  }
   const now = stampNow();
   const { error } = await supabase.from("tombstones").upsert({ id, kind: "projects", updated_at: now });
   if (error) console.error("AutoSync delete error (Project tombstone):", error);
+  else console.log("[autoPushDeleteProject] Tombstone subida OK");
 }
 
 /** Sube (Upsert) un proyecto a Supabase silenciosamente en segundo plano. */
