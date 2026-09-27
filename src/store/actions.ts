@@ -23,7 +23,7 @@ export async function deleteProject(id: string): Promise<void> {
   // Recojo los ids ANTES de desengancharlos para poder re-lerlos y subirlos.
   const affectedIds = (await db.tasks.where("projectId").equals(id).toArray()).map((t) => t.id);
 
-  await db.transaction("rw", db.tasks, db.projects, async () => {
+  await db.transaction("rw", db.tasks, db.projects, db.tombstones, async () => {
     await db.tasks.where("projectId").equals(id).modify({ projectId: undefined });
     // Borrado suave: marcamos deletedAt y creamos tumba.
     const now = stampNow();
@@ -109,7 +109,7 @@ export async function deleteTask(id: string): Promise<void> {
   // Elimina también subtareas con borrado suave
   const subtasks = await db.tasks.where("parentId").equals(id).toArray();
 
-  await db.transaction("rw", db.tasks, async () => {
+  await db.transaction("rw", db.tasks, db.tombstones, async () => {
     const now = stampNow();
     // Marcamos subtareas como borradas
     await db.tasks.where("parentId").equals(id).modify({ deletedAt: now });

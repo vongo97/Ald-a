@@ -60,12 +60,31 @@ async function sessionUserId(): Promise<string | null> {
   return data.session?.user?.id ?? null;
 }
 
-/** Quita columnas de servidor que no pertenecen al modelo local. */
-function stripRemote<T>(row: T): T {
-  if (row && typeof row === "object" && "user_id" in row) {
-    delete (row as { user_id?: unknown }).user_id;
-  }
-  return row;
+/**
+ * Quita columnas de servidor y normaliza el caso.
+ *
+ * El modelo local usa camelCase (`updatedAt`, `deletedAt`) pero Supabase
+ * tiene `updated_at`/`deleted_at` (snake_case, añadidos por las migraciones
+ * 0001 y 0005). Sin este mapeo, cualquier `select`/`upsert` con `updatedAt`
+ * devuelve 400 y la sync entera se aborta.
+ */
+function stripRemote<T>(row: Record<string, unknown>): T {
+  const { user_id: _userId, updated_at, deleted_at, ...rest } = row;
+  return {
+    ...rest,
+    ...(updated_at !== undefined ? { updatedAt: updated_at } : {}),
+    ...(deleted_at !== undefined ? { deletedAt: deleted_at } : {}),
+  } as T;
+}
+
+/** Convierte el modelo local (camelCase) a las columnas reales de Supabase. */
+function toRemote(row: Record<string, unknown>): Record<string, unknown> {
+  const { updatedAt, deletedAt, ...rest } = row;
+  return {
+    ...rest,
+    ...(updatedAt !== undefined ? { updated_at: updatedAt } : {}),
+    ...(deletedAt !== undefined ? { deleted_at: deletedAt } : {}),
+  };
 }
 
 /** Sube un lote de tareas (upsert por id). Silencioso si no hay sesión. */
@@ -73,7 +92,9 @@ export async function autoPushTasks(tasks: Task[]): Promise<void> {
   if (tasks.length === 0) return;
   const userId = await sessionUserId();
   if (!userId) return;
-  const { error } = await supabase.from("tasks").upsert(tasks.map((t) => ({ ...t, user_id: userId })));
+  const { error } = await supabase
+    .from("tasks")
+    .upsert(tasks.map((t) => ({ ...toRemote(t as unknown as Record<string, unknown>), user_id: userId })));
   if (error) console.error("AutoSync error (tasks bulk):", error);
 }
 
@@ -82,7 +103,9 @@ export async function autoPushProjects(projects: Project[]): Promise<void> {
   if (projects.length === 0) return;
   const userId = await sessionUserId();
   if (!userId) return;
-  const { error } = await supabase.from("projects").upsert(projects.map((p) => ({ ...p, user_id: userId })));
+  const { error } = await supabase
+    .from("projects")
+    .upsert(projects.map((p) => ({ ...toRemote(p as unknown as Record<string, unknown>), user_id: userId })));
   if (error) console.error("AutoSync error (projects bulk):", error);
 }
 
@@ -111,8 +134,8 @@ export async function pushLocalChanges(): Promise<{ tasks: number; projects: num
   if (!userId) return { tasks: 0, projects: 0 };
 
   const [remoteTasks, remoteProjects] = await Promise.all([
-    supabase.from("tasks").select("id, updatedAt"),
-    supabase.from("projects").select("id, updatedAt"),
+    supabase.from("tasks").select("id, updated_at"),
+    supabase.from("projects").select("id, updated_at"),
   ]);
 
   // Si la nube no responde no asumimos "todo es local": abortar el push es lo
@@ -123,10 +146,10 @@ export async function pushLocalChanges(): Promise<{ tasks: number; projects: num
   }
 
   const remoteTaskTime = new Map<string, number>(
-    (remoteTasks.data ?? []).map((r) => [r.id, timestamp(r.updatedAt)]),
+    (remoteTasks.data ?? []).map((r) => [r.id, timestamp((r as { updated_at?: string }).updated_at)]),
   );
   const remoteProjectTime = new Map<string, number>(
-    (remoteProjects.data ?? []).map((r) => [r.id, timestamp(r.updatedAt)]),
+    (remoteProjects.data ?? []).map((r) => [r.id, timestamp((r as { updated_at?: string }).updated_at)]),
   );
 
   const [localTasks, localProjects] = await Promise.all([db.tasks.toArray(), db.projects.toArray()]);
@@ -167,29 +190,32 @@ export async function pullAndSyncFromSupabase(): Promise<void> {
 
   // 3) Bajar tumbas para aplicar borrados remotos.
   const [{ data: tombData, error: tombErr }] = await Promise.all([
-    supabase.from("tombstones").select("*"),
+    supabase.from("tombstones").select("id, kind, updated_at"),
   ]);
+  if (tombErr) console.error("Pull de tumbas falló:", tombErr);
 
   // 4) Fusionar dentro de una transacción.
-  await db.transaction("rw", db.tasks, db.projects, async () => {
+  await db.transaction("rw", db.tasks, db.projects, db.tombstones, async () => {
     // Aplicar tumbas remotas: elimina localmente si la tumba es más reciente.
-    for (const raw of (tombData ?? []) as { id: string; kind: string; updatedAt: string }[]) {
-      const remoteTime = timestamp(raw.updatedAt);
+    for (const raw of (tombData ?? []) as { id: string; kind: string; updated_at: string }[]) {
+      const remoteTime = timestamp(raw.updated_at);
       if (raw.kind === "tasks") {
         const local = await db.tasks.get(raw.id);
         if (local && (!local.deletedAt || timestamp(local.deletedAt) < remoteTime)) {
-          await db.tasks.update(raw.id, { deletedAt: raw.updatedAt });
+          await db.tasks.update(raw.id, { deletedAt: raw.updated_at });
         }
       } else if (raw.kind === "projects") {
         const local = await db.projects.get(raw.id);
         if (local && (!local.deletedAt || timestamp(local.deletedAt) < remoteTime)) {
-          await db.projects.update(raw.id, { deletedAt: raw.updatedAt });
+          await db.projects.update(raw.id, { deletedAt: raw.updated_at });
         }
       }
+      // Guardamos la tumba local para que el próximo push la re-envíe si hace falta.
+      await db.tombstones.put({ id: raw.id, kind: raw.kind as "tasks" | "projects", updatedAt: raw.updated_at });
     }
 
     for (const raw of pData ?? []) {
-      const remote = stripRemote(raw);
+      const remote = stripRemote<Project>(raw as Record<string, unknown>);
       const local = await db.projects.get(remote.id);
       if (mergeDecision(local, remote) === "take-remote") {
         await db.projects.put(remote);
@@ -198,7 +224,7 @@ export async function pullAndSyncFromSupabase(): Promise<void> {
       }
     }
     for (const raw of tData ?? []) {
-      const remote = stripRemote(raw);
+      const remote = stripRemote<Task>(raw as Record<string, unknown>);
       const local = await db.tasks.get(remote.id);
       if (mergeDecision(local, remote) === "take-remote") {
         await db.tasks.put(remote);
