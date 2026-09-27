@@ -3,11 +3,9 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/store/db";
 import { updateTask } from "@/store/actions";
 import { useStore } from "@/store/useStore";
-import { useSettings } from "@/store/SettingsContext";
-import { draftDayPlan } from "@/llm/tasks";
 import { toISODate, startOfDay } from "@/domain/dateutils";
 import { useTimeBlockAlerts } from "@/notifications/useTimeBlockAlerts";
-import type { Task } from "@/domain/types";
+import DayPlanModal from "@/components/DayPlanModal";
 
 const START_H = 7;
 const END_H = 22;
@@ -15,11 +13,10 @@ const PX_PER_H = 56;
 
 export default function DayView() {
   const pushToast = useStore((s) => s.pushToast);
-  const { settings } = useSettings();
   const allTasks = useLiveQuery(() => db.tasks.toArray(), [], []);
   const projects = useLiveQuery(() => db.projects.toArray(), [], []);
   const [selected, setSelected] = useState<string | null>(null);
-  const [planning, setPlanning] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
 
   const today = toISODate(startOfDay(new Date()));
   const tasks = useMemo(() => (allTasks ?? []).filter((t) => t.dueDate === today && t.status === "todo" && !t.deletedAt), [allTasks, today]);
@@ -31,49 +28,6 @@ export default function DayView() {
   useTimeBlockAlerts(scheduled);
 
   const minutesToY = (min: number) => ((min - START_H * 60) / 60) * PX_PER_H;
-
-  const autoPlan = async () => {
-    if (unscheduled.length === 0) {
-      pushToast(
-        tasks.length === 0
-          ? "No hay tareas con fecha de hoy para planificar"
-          : "Todas las tareas de hoy ya están bloqueadas 🎉",
-      );
-      return;
-    }
-    if (!settings.apiKey.trim()) {
-      pushToast("Configura tu clave de IA en Ajustes para planificar con IA");
-      return;
-    }
-    setPlanning(true);
-    try {
-      const res = await draftDayPlan({ settings }, unscheduled);
-      if (!res.ok || !res.data || res.data.length === 0) {
-        pushToast(`No se pudo generar el plan: ${res.error ?? "Sin respuesta válida"}`);
-        return;
-      }
-      let applied = 0;
-      for (const item of res.data) {
-        let targetId = item.taskId;
-        if (!targetId || !unscheduled.some((u) => u.id === targetId)) {
-          const match = unscheduled.find((u) =>
-            u.title.toLowerCase().includes(item.title.toLowerCase()) ||
-            item.title.toLowerCase().includes(u.title.toLowerCase()),
-          );
-          if (match) targetId = match.id;
-        }
-        if (targetId) {
-          await updateTask(targetId, { timeBlock: { start: item.start, end: item.end } });
-          applied++;
-        }
-      }
-      pushToast(`Plan aplicado: ${applied} bloques horarios asignados`);
-    } catch (err) {
-      pushToast(`Error: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setPlanning(false);
-    }
-  };
 
   const onGridClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!selected) return;
@@ -117,16 +71,11 @@ export default function DayView() {
         </div>
         <button
           type="button"
-          disabled={planning}
-          onClick={() => void autoPlan()}
+          onClick={() => setPlanOpen(true)}
           className="btn-primary text-xs"
-          title={
-            unscheduled.length === 0
-              ? "No hay tareas sin bloquear para hoy"
-              : "Construye un borrador de bloques horarios con IA para las tareas de hoy"
-          }
+          title="Describe tu día en lenguaje natural y la IA propondrá horarios"
         >
-          {planning ? "Planificando..." : "✨ Planificar día (IA)"}
+          ✨ Planificar día (IA)
         </button>
       </header>
 
@@ -214,6 +163,8 @@ export default function DayView() {
           )}
         </div>
       </div>
+
+      <DayPlanModal open={planOpen} onClose={() => setPlanOpen(false)} />
     </section>
   );
 }
