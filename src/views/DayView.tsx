@@ -34,7 +34,11 @@ export default function DayView() {
 
   const autoPlan = async () => {
     if (unscheduled.length === 0) {
-      pushToast("No hay tareas sin bloquear para hoy");
+      pushToast(
+        tasks.length === 0
+          ? "No hay tareas con fecha de hoy para planificar"
+          : "Todas las tareas de hoy ya están bloqueadas 🎉",
+      );
       return;
     }
     if (!settings.apiKey.trim()) {
@@ -102,15 +106,25 @@ export default function DayView() {
         <div>
           <h1 className="font-display text-2xl font-semibold">Día</h1>
           <span className="text-xs text-muted">
-            {selected ? "Elige la hora de inicio en la rejilla…" : "Selecciona una tarea y haz clic en la rejilla"}
+            {selected
+              ? "Elige la hora de inicio en la rejilla…"
+              : unscheduled.length === 0 && tasks.length > 0
+                ? "Todas las tareas de hoy ya están bloqueadas 🎉"
+                : tasks.length === 0
+                  ? "No hay tareas con fecha de hoy — añade alguna desde Bandeja"
+                  : "Selecciona una tarea y haz clic en la rejilla"}
           </span>
         </div>
         <button
           type="button"
-          disabled={planning || unscheduled.length === 0}
+          disabled={planning}
           onClick={() => void autoPlan()}
           className="btn-primary text-xs"
-          title="Construye un borrador de bloques horarios con IA para las tareas de hoy"
+          title={
+            unscheduled.length === 0
+              ? "No hay tareas sin bloquear para hoy"
+              : "Construye un borrador de bloques horarios con IA para las tareas de hoy"
+          }
         >
           {planning ? "Planificando..." : "✨ Planificar día (IA)"}
         </button>
