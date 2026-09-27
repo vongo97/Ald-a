@@ -1,6 +1,49 @@
 import type { Task } from "./types";
 
 /**
+ * Días que un elemento borrado vive en la Papelera antes de eliminarse
+ * definitivamente (local + nube). Visto en `PapeleraView` y aplicado por
+ * `store/purge.ts` tras cada sync.
+ */
+export const TRASH_RETENTION_DAYS = 30;
+
+/**
+ * Elementos borrados que ya han caducado (más de `days` días): candidatos
+ * a purga automática. Genérico para tareas y proyectos.
+ *
+ * Exportada para tests.
+ */
+export function expiredTrash<T extends { deletedAt?: string }>(
+  rows: T[],
+  now = Date.now(),
+  days = TRASH_RETENTION_DAYS,
+): T[] {
+  const cutoff = now - days * 86_400_000;
+  return rows.filter((r) => {
+    if (!r.deletedAt) return false;
+    const t = Date.parse(r.deletedAt);
+    return !Number.isNaN(t) && t < cutoff;
+  });
+}
+
+/**
+ * Días de vida que le quedan en la Papelera (`null` si no está borrada o
+ * la fecha es ilegible). Sirve para el aviso «caduca en Xd» de cada fila.
+ *
+ * Exportada para tests.
+ */
+export function daysLeftInTrash(
+  deletedAt: string | undefined,
+  now = Date.now(),
+  days = TRASH_RETENTION_DAYS,
+): number | null {
+  if (!deletedAt) return null;
+  const t = Date.parse(deletedAt);
+  if (Number.isNaN(t)) return null;
+  return Math.max(0, Math.ceil((t + days * 86_400_000 - now) / 86_400_000));
+}
+
+/**
  * Borrados con `deletedAt` agrupados por ramas: devuelve solo las raíces
  * (sin padre, huérfanas o con el padre todavía vivas).
  *

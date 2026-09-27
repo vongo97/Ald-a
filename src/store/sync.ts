@@ -306,8 +306,8 @@ export async function autoPushProject(project: Project): Promise<void> {
 }
 
 /**
- * Deshace un borrado en la nube: borra las tumbas remotas Y sube las tareas
- * con `deleted_at: null`. Hace falta hacer AMBAS cosas:
+ * Deshace un borrado en la nube (genérico: tasks/projects): borra la tumba
+ * remota Y sube las filas con `deleted_at: null`. Hace falta hacer AMBAS cosas:
  *
  *  - si queda la tumba, el próximo pull la re-aplica y vuelve a borrar;
  *  - `toRemote` omite `deleted_at` cuando `deletedAt` es `undefined`, así que
@@ -316,23 +316,59 @@ export async function autoPushProject(project: Project): Promise<void> {
  *
  * Silenciosa si no hay sesión: lo local ya quedó restaurado.
  */
-export async function autoRestoreTasks(tasks: Task[]): Promise<void> {
-  if (tasks.length === 0) return;
+async function autoRestoreRows(
+  table: "tasks" | "projects",
+  kind: "tasks" | "projects",
+  rows: Array<Record<string, unknown>>,
+): Promise<void> {
+  if (rows.length === 0) return;
   const userId = await sessionUserId();
   if (!userId) return;
-  const ids = tasks.map((t) => t.id);
+  // El filtro de `kind` importa: la clave de las tumbas es (kind, id), así
+  // que un mismo id puede existir como tumba de tarea y de proyecto.
+  const ids = rows.map((r) => r.id as string);
   const [{ error: tombErr }, { error }] = await Promise.all([
-    supabase.from("tombstones").delete().in("id", ids),
+    supabase.from("tombstones").delete().in("id", ids).eq("kind", kind),
     supabase
-      .from("tasks")
+      .from(table)
       .upsert(
-        tasks.map((t) => ({
-          ...toRemote(t as unknown as Record<string, unknown>),
+        rows.map((r) => ({
+          ...toRemote(r),
           deleted_at: null,
           user_id: userId,
         })),
       ),
   ]);
-  if (tombErr) console.error("AutoSync restore error (tombstones):", tombErr);
-  if (error) console.error("AutoSync restore error (tasks bulk):", error);
+  if (tombErr) console.error(`AutoSync restore error (${table} tombstones):`, tombErr);
+  if (error) console.error(`AutoSync restore error (${table} bulk):`, error);
+}
+
+export async function autoRestoreTasks(tasks: Task[]): Promise<void> {
+  await autoRestoreRows("tasks", "tasks", tasks as unknown as Array<Record<string, unknown>>);
+}
+
+export async function autoRestoreProjects(projects: Project[]): Promise<void> {
+  await autoRestoreRows("projects", "projects", projects as unknown as Array<Record<string, unknown>>);
+}
+
+/**
+ * Borrado DEFINITIVO en la nube: elimina las filas de `tasks` o `projects`.
+ *
+ * Las tumbas remotas se conservan a propósito: son la única señal que le
+ * dice a otros dispositivos «esto se borró». Sin ellas, quien tenga una copia
+ * offline re-subiría la fila en su próximo push y resucitaría el elemento.
+ * (Un dispositivo muy viejo genera un ida y vuelta corto: al abrir, su propia
+ * caducidad de 30 días purga su copia y deja de re-subir.)
+ *
+ * Silenciosa si no hay sesión (nada que borrar en la nube).
+ */
+export async function purgeRemoteRows(
+  table: "tasks" | "projects",
+  ids: string[],
+): Promise<void> {
+  if (ids.length === 0) return;
+  const userId = await sessionUserId();
+  if (!userId) return;
+  const { error } = await supabase.from(table).delete().in("id", ids).eq("user_id", userId);
+  if (error) console.error(`Purge error (${table}):`, error);
 }

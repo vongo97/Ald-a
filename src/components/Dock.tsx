@@ -31,7 +31,18 @@ export default function Dock() {
   const setView = useStore((s) => s.setView);
   const openCapture = useStore((s) => s.openCapture);
   // Contador de borrados: el badge descubre la Papelera (nada se pierde solo).
-  const trashCount = useLiveQuery(() => db.tasks.filter((t) => !!t.deletedAt).count(), [], 0);
+  // Cuenta tareas Y proyectos (los proyectos borrados también viven aquí).
+  const trashCount = useLiveQuery(
+    async () => {
+      const [tasks, projects] = await Promise.all([
+        db.tasks.filter((t) => !!t.deletedAt).count(),
+        db.projects.filter((p) => !!p.deletedAt).count(),
+      ]);
+      return tasks + projects;
+    },
+    [],
+    0,
+  );
 
   return (
     <>

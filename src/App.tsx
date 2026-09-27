@@ -21,6 +21,7 @@ import { loadProfile } from "@/store/profile";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/store/db";
 import { pullAndSyncFromSupabase } from "@/store/sync";
+import { purgeExpiredTrash } from "@/store/purge";
 import { toISODate, startOfDay } from "@/domain/dateutils";
 import {
   notificationsSupported,
@@ -62,19 +63,34 @@ function AppInner() {
   // Al conocer la sesión (login por contraseña, OAuth con Google o recarga),
   // sincroniza una sola vez. Antes esto solo ocurría en el login por contraseña,
   // así que Google dejaba los datos sin bajar.
+  //
+  // La purga de la Papelera (caducidad de 30 días) se ejecuta SIEMPRE después
+  // del pull —o al cargar sin cuenta—: si va antes, el pull vuelve a bajar de
+  // la nube las filas que acabamos de purgar.
   useEffect(() => {
     const userId = session?.user?.id;
-    if (!userId || pulledFor.current === userId) return;
-    pulledFor.current = userId;
+    if (userId && pulledFor.current === userId) return;
+    if (userId) pulledFor.current = userId;
+
     void (async () => {
-      const summary = await pullAndSyncFromSupabase();
-      // Avisos de conflictos: borrados que llegaron desde otro dispositivo.
-      if (summary && summary.remoteDeletes > 0) {
-        const n = summary.remoteDeletes;
+      if (userId) {
+        const summary = await pullAndSyncFromSupabase();
+        // Avisos de conflictos: borrados que llegaron desde otro dispositivo.
+        if (summary && summary.remoteDeletes > 0) {
+          const n = summary.remoteDeletes;
+          pushToast(
+            n === 1
+              ? "1 tarea eliminada desde otro dispositivo"
+              : `${n} tareas eliminadas desde otro dispositivo`,
+          );
+        }
+      }
+
+      const purged = await purgeExpiredTrash();
+      const total = purged.tasks + purged.projects;
+      if (total > 0) {
         pushToast(
-          n === 1
-            ? "1 tarea eliminada desde otro dispositivo"
-            : `${n} tareas eliminadas desde otro dispositivo`,
+          `🗑️ Papelera: ${total} ${total === 1 ? "elemento" : "elementos"} eliminado${total === 1 ? "" : "s"} tras 30 días`,
         );
       }
     })();

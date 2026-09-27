@@ -3,7 +3,7 @@ import type { ParsedCapture } from "@/parsers/capture";
 import type { Project, Task } from "@/domain/types";
 import { nextOccurrence } from "@/domain/recurrence";
 import { toISODate, parseISODate } from "@/domain/dateutils";
-import { autoPushTask, autoPushProject, autoPushTasks, autoPushDeleteTask, autoPushDeleteProject, autoRestoreTasks } from "./sync";
+import { autoPushTask, autoPushProject, autoPushTasks, autoPushDeleteTask, autoPushDeleteProject, autoRestoreTasks, autoRestoreProjects } from "./sync";
 import { randomColor } from "@/domain/color";
 import { restoreSet } from "@/domain/trash";
 
@@ -170,6 +170,31 @@ export async function restoreTask(id: string): Promise<number> {
 
   void autoRestoreTasks(restored);
   return restored.length;
+}
+
+/**
+ * Deshace el borrado de un proyecto (mismo patrón que `restoreTask`): limpia
+ * `deletedAt`, quita la tumba local y luego sincroniza (tumba remota +
+ * `deleted_at: null`).
+ *
+ * Nota: las tareas NO vuelven a engancharse — al borrar el proyecto se
+ * desengancharon para siempre (`deleteProject` las deja sin proyecto); solo
+ * se recupera la carpeta.
+ *
+ * Devuelve 1 si restaura, 0 si no había nada que restaurar.
+ */
+export async function restoreProject(id: string): Promise<number> {
+  const project = await db.projects.get(id);
+  if (!project || !project.deletedAt) return 0;
+
+  const fresh: Project = { ...project, deletedAt: undefined, updatedAt: stampNow() };
+  await db.transaction("rw", db.projects, db.tombstones, async () => {
+    await db.projects.put(fresh);
+    await db.tombstones.delete(["projects", id]);
+  });
+
+  void autoRestoreProjects([fresh]);
+  return 1;
 }
 
 export async function addSubtask(parent: Task, title: string): Promise<Task> {

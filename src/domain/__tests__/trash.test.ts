@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { deletedRoots, deletedForest, restoreSet } from "../trash";
+import {
+  deletedRoots,
+  deletedForest,
+  restoreSet,
+  expiredTrash,
+  daysLeftInTrash,
+  TRASH_RETENTION_DAYS,
+} from "../trash";
 import type { Task } from "../types";
 
 const DEL = "2026-09-21T10:00:00.000Z";
@@ -133,5 +140,66 @@ describe("restoreSet", () => {
       makeTask({ id: "otro", deletedAt: DEL }),
     ];
     expect(restoreSet(tasks, "ramaA").map((t) => t.id).sort()).toEqual(["raiz", "ramaA"]);
+  });
+});
+
+/** Instante fijo para la caducidad: hoy. */
+const NOW = Date.parse("2026-09-27T12:00:00.000Z");
+const haceDias = (n: number) => new Date(NOW - n * 86_400_000).toISOString();
+
+describe("expiredTrash (caducidad de la Papelera)", () => {
+  it("el plazo son 30 días", () => {
+    expect(TRASH_RETENTION_DAYS).toBe(30);
+  });
+
+  it("solo caducan las borradas hace MÁS de 30 días", () => {
+    const rows = [
+      makeTask({ id: "vieja", deletedAt: haceDias(31) }),
+      makeTask({ id: "limite", deletedAt: haceDias(30) }), // justo 30 → aún no
+      makeTask({ id: "reciente", deletedAt: haceDias(5) }),
+      makeTask({ id: "viva" }),
+    ];
+    expect(expiredTrash(rows, NOW).map((t) => t.id)).toEqual(["vieja"]);
+  });
+
+  it("las vivas y las fechas ilegibles nunca caducan", () => {
+    const rows = [
+      makeTask({ id: "viva" }),
+      makeTask({ id: "rara", deletedAt: "no-es-una-fecha" }),
+    ];
+    expect(expiredTrash(rows, NOW)).toEqual([]);
+  });
+
+  it("es genérico: caducan también proyectos borrados", () => {
+    const projects = [
+      { id: "p1", name: "Viejo", color: "#fff", deletedAt: haceDias(40) },
+      { id: "p2", name: "Nuevo", color: "#fff", deletedAt: haceDias(1) },
+    ];
+    expect(expiredTrash(projects, NOW).map((p) => p.id)).toEqual(["p1"]);
+  });
+
+  it("respeta un plazo distinto si se pasa days", () => {
+    const rows = [makeTask({ id: "t", deletedAt: haceDias(8) })];
+    expect(expiredTrash(rows, NOW, 7)).toHaveLength(1);
+    expect(expiredTrash(rows, NOW, 30)).toHaveLength(0);
+  });
+});
+
+describe("daysLeftInTrash (aviso «caduca en Xd»)", () => {
+  it("recién borrada quedan 30 días", () => {
+    expect(daysLeftInTrash(haceDias(0), NOW)).toBe(30);
+  });
+
+  it("redondea hacia arriba: 29,5 días → 1 día restante", () => {
+    expect(daysLeftInTrash(haceDias(29.5), NOW)).toBe(1);
+  });
+
+  it("caducada devuelve 0 (nunca negativo)", () => {
+    expect(daysLeftInTrash(haceDias(90), NOW)).toBe(0);
+  });
+
+  it("viva o fecha ilegible → null (sin aviso en la fila)", () => {
+    expect(daysLeftInTrash(undefined, NOW)).toBeNull();
+    expect(daysLeftInTrash("basura", NOW)).toBeNull();
   });
 });

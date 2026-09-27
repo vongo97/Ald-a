@@ -31,7 +31,10 @@ export default function ProjectsView() {
 
   if (!projects || !allTasks) return null;
 
-  const selected = projects.find((p) => p.id === selectedProjectId);
+  // Los proyectos borrados (soft delete) viven en la Papelera: aquí no deben
+  // aparecer, si no «eliminar» parecería que no hace nada.
+  const visible = projects.filter((p) => !p.deletedAt);
+  const selected = visible.find((p) => p.id === selectedProjectId);
 
   return (
     <section>
@@ -60,11 +63,11 @@ export default function ProjectsView() {
         <button type="submit" className="btn-primary">Crear</button>
       </form>
 
-      {projects.length === 0 ? (
+      {visible.length === 0 ? (
         <EmptyState icon="📁" title="Sin proyectos" hint="Crea uno arriba. También se crean solos al capturar «comprar pan #casa»." />
       ) : (
         <div className="flex flex-wrap gap-2">
-          {projects.map((p) => {
+          {visible.map((p) => {
             const count = (tasksByProject.get(p.id) ?? []).length;
             return (
               <button
