@@ -152,14 +152,16 @@ function AppInner() {
       )}
 
       <main className="flex-1 overflow-y-auto px-4 pb-24">
-        {view === "hoy" && <TodayView />}
-        {view === "dia" && <DayView />}
-        {view === "bandeja" && <InboxView />}
-        {view === "proyectos" && <ProjectsView />}
-        {view === "etiquetas" && <LabelsView />}
-        {view === "revision" && <ReviewView />}
-        {view === "buscar" && <SearchView />}
-        {view === "ajustes" && <SettingsView />}
+        <div key={view} className="view-enter">
+          {view === "hoy" && <TodayView />}
+          {view === "dia" && <DayView />}
+          {view === "bandeja" && <InboxView />}
+          {view === "proyectos" && <ProjectsView />}
+          {view === "etiquetas" && <LabelsView />}
+          {view === "revision" && <ReviewView />}
+          {view === "buscar" && <SearchView />}
+          {view === "ajustes" && <SettingsView />}
+        </div>
       </main>
 
       <CaptureModal />

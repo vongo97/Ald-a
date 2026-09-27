@@ -76,7 +76,7 @@ export default function LabelsView() {
   return (
     <section>
       <header className="mb-3">
-        <h1 className="text-xl font-bold">Etiquetas</h1>
+        <h1 className="font-display text-2xl font-semibold">Etiquetas</h1>
       </header>
 
       <form

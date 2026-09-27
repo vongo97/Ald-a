@@ -100,7 +100,7 @@ export default function DayView() {
     <section>
       <header className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h1 className="text-xl font-bold">Día</h1>
+          <h1 className="font-display text-2xl font-semibold">Día</h1>
           <span className="text-xs text-slate-400 light:text-slate-500">
             {selected ? "Elige la hora de inicio en la rejilla…" : "Selecciona una tarea y haz clic en la rejilla"}
           </span>

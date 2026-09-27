@@ -25,7 +25,7 @@ export default function SearchView() {
   return (
     <section>
       <header className="mb-3">
-        <h1 className="text-xl font-bold">Buscar</h1>
+        <h1 className="font-display text-2xl font-semibold">Buscar</h1>
       </header>
       <input
         className="input mb-4"

@@ -36,7 +36,7 @@ export default function ProjectsView() {
   return (
     <section>
       <header className="mb-3 flex items-baseline justify-between">
-        <h1 className="text-xl font-bold">Proyectos</h1>
+        <h1 className="font-display text-2xl font-semibold">Proyectos</h1>
       </header>
 
       <form

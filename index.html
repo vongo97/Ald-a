@@ -3,10 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0f172a" />
+    <meta name="theme-color" content="#1a1614" />
     <meta name="description" content="Gestor de tareas inteligente con captura en lenguaje natural, capacidad de día y time-blocking" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjIwIiBmaWxsPSIjMGYxNzJhIi8+PHBhdGggZD0iTTI1IDUwIEw0MCA2NSBMNzUgMzAiIHN0cm9rZT0iIzM4YmRmOCIgc3Ryb2tlLXdpZHRoPSI4IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=" />
     <title>Mis Tareas</title>
+    <!-- Fraunces: serif cálida y editorial (inspiración Anthropic) para títulos.
+         Se carga con display=swap para no bloquear el primer paint. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet" />
     <script>
       /* Aplica el tema ANTES del primer paint para evitar el parpadeo
          oscuro→claro. Debe ser inline y síncrono: si va en main.tsx el
@@ -27,7 +32,7 @@
           el.classList.toggle("dark", dark);
           el.style.colorScheme = dark ? "dark" : "light";
           var m = document.querySelector('meta[name="theme-color"]');
-          if (m) m.setAttribute("content", dark ? "#0f172a" : "#f8fafc");
+          if (m) m.setAttribute("content", dark ? "#1a1614" : "#faf9f5");
         } catch (e) {}
       })();
     </script>

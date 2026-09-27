@@ -45,8 +45,10 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
         <button
           type="button"
           onClick={toggle}
-          className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-            done ? "border-emerald-400 light:border-emerald-300 bg-emerald-400 text-slate-950 light:text-white" : "border-slate-500 light:border-slate-300 hover:border-sky-400 hover:light:border-sky-500"
+          className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-200 ${
+            done
+              ? "check-pop border-emerald-400 light:border-emerald-300 bg-emerald-400 text-slate-950 light:text-white"
+              : "border-[var(--card-border)] hover:border-[var(--accent)] hover:scale-110"
           }`}
           aria-label={done ? "Marcar como pendiente" : "Completar"}
         >

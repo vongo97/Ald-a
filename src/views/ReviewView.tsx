@@ -33,7 +33,7 @@ export default function ReviewView() {
   return (
     <section>
       <header className="mb-3">
-        <h1 className="text-xl font-bold">Revisión semanal</h1>
+        <h1 className="font-display text-2xl font-semibold">Revisión semanal</h1>
         <p className="text-xs text-slate-400 light:text-slate-500">Ritual de 10 minutos: despeja lo vencido, da fechas a lo sin fecha y mira la semana.</p>
       </header>
 

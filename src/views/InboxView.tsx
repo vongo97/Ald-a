@@ -18,7 +18,7 @@ export default function InboxView() {
   return (
     <section>
       <header className="mb-3 flex items-baseline justify-between">
-        <h1 className="text-xl font-bold">Bandeja</h1>
+        <h1 className="font-display text-2xl font-semibold">Bandeja</h1>
         <span className="text-xs text-slate-400 light:text-slate-500">{tasks.length} activas</span>
       </header>
       {tasks.length === 0 ? (

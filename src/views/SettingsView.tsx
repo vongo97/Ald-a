@@ -141,7 +141,7 @@ export default function SettingsView() {
   return (
     <section className="max-w-xl">
       <header className="mb-3">
-        <h1 className="text-xl font-bold">Ajustes</h1>
+        <h1 className="font-display text-2xl font-semibold">Ajustes</h1>
       </header>
 
       <div className={`card mb-4 p-3 text-sm ${status === "active" ? "border-emerald-500/40 light:border-emerald-300 bg-emerald-500/10 light:bg-emerald-50 text-emerald-200 light:text-emerald-700" : "border-slate-600 light:border-slate-300 bg-slate-800/60 light:bg-white text-slate-300 light:text-slate-700"}`}>

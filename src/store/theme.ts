@@ -54,7 +54,7 @@ export function applyTheme(pref: ThemePref): boolean {
   el.style.colorScheme = dark ? "dark" : "light";
 
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", dark ? "#0f172a" : "#f8fafc");
+  if (meta) meta.setAttribute("content", dark ? "#1a1614" : "#faf9f5");
 
   return dark;
 }

@@ -31,7 +31,7 @@ export default function TodayView() {
   return (
     <section>
       <header className="mb-3 flex items-baseline justify-between">
-        <h1 className="text-xl font-bold">Hoy</h1>
+        <h1 className="font-display text-2xl font-semibold">Hoy</h1>
         <span className="text-xs text-slate-400 light:text-slate-500">
           {todays.length} tarea{todays.length === 1 ? "" : "s"}
         </span>
