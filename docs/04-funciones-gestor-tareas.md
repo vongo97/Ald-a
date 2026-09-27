@@ -92,14 +92,38 @@
 - **Time-blocking (implementado):** vista Día con rejilla 07:00–22:00; seleccionar tarea y clic en
   la rejilla crea un bloque redondeado a 15 min usando la duración estimada; los bloques se quitan
   con un clic. Colores por proyecto pendiente de aplicar a los bloques.
-- **Pendiente:** animaciones de completado, transiciones entre vistas, auditoría de contraste/ARIA
-  completa y conmutador de tema claro/oscuro (hoy el tema es oscuro por diseño).
+- **Tema claro/oscuro (implementado):** variante `light` con selector en Ajustes (claro / oscuro /
+  seguir el sistema); script inline en `index.html` antes del primer paint para evitar el
+  parpadeo.
+- **Accesibilidad (implementada):** `aria-current` en la navegación, avisos con `aria-live`,
+  diálogos modales reales (`role="dialog"` + hook `useDialogA11y` con foco atrapado y `Esc`).
+- **Móvil (implementada):** nav en una fila con scroll horizontal, objetivos táctiles de 44 px,
+  texto mínimo de 12 px, panel de tarea que deja de estrujarse.
+- **Pendiente:** animaciones de completado, transiciones entre vistas, auditoría de contraste
+  completa y colores por proyecto en los bloques de la vista Día.
+
+## Fase 5 — Sincronización multi-dispositivo (implementada)
+
+- **Supabase (OAuth con Google; registro por correo deshabilitado):** RLS por usuario en
+  `tasks`/`projects`; `updated_at` en el servidor con trigger.
+- **Push antes que pull:** `pullAndSyncFromSupabase` sube primero lo local (último en escribir
+  gana) y solo después baja la nube; nunca hace `clear()` sobre IndexedDB, así que un fallo de
+  red deja lo local intacto.
+- **Mapeo camelCase ↔ snake_case:** el modelo local usa `updatedAt`/`deletedAt` pero las
+  columnas de Supabase son `updated_at`/`deleted_at`; `toRemote()`/`stripRemote()` hacen la
+  traducción en `sync.ts`. Sin esto cualquier `select`/`upsert` devuelve 400.
+- **Borrado suave con tumbas (migración 0005):** `deleteTask`/`deleteProject` marcan
+  `deletedAt` y crean una fila en `tombstones` (local y en Supabase) en la misma transacción.
+  El pull aplica los borrados remotos comparando fechas; las vistas filtran `!deletedAt`.
+- **Backup:** exportar/importar JSON desde Ajustes.
 
 ## Verificación (estado actual)
 
 - `npm run typecheck` (tsc -b) sin errores.
-- `npm test` (Vitest): 59 tests de parser de fechas/recurrencia en español, parser de captura,
-  score de prioridad, capacidad, desviación, recurrencias y adaptador LLM con `fetch` simulado
-  (éxito OpenAI/Anthropic, reintentos ante 500, degradación sin clave, extracción JSON).
+- `npm test` (Vitest): **72 tests** — parser de fechas/recurrencia en español, parser de
+  captura, score de prioridad, capacidad, desviación, recurrencias, adaptador LLM con `fetch`
+  simulado (éxito OpenAI/Anthropic, reintentos ante 500, degradación sin clave, extracción JSON)
+  y reglas de merge de sincronización (incluido el borrado suave: borrado remoto gana, un
+  borrado local no se revierte).
 - `npm run build` (vite build + PWA) exitoso; revisión visual de Hoy, Día, Bandeja, Revisión,
   captura en vivo y flujo completar/deshacer hecha en navegador.
