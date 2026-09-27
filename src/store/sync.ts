@@ -304,3 +304,35 @@ export async function autoPushDeleteProject(id: string): Promise<void> {
 export async function autoPushProject(project: Project): Promise<void> {
   await autoPushProjects([project]);
 }
+
+/**
+ * Deshace un borrado en la nube: borra las tumbas remotas Y sube las tareas
+ * con `deleted_at: null`. Hace falta hacer AMBAS cosas:
+ *
+ *  - si queda la tumba, el próximo pull la re-aplica y vuelve a borrar;
+ *  - `toRemote` omite `deleted_at` cuando `deletedAt` es `undefined`, así que
+ *    un upsert normal no limpiaría la columna y `mergeDecision` ganaría el
+ *    borrado remoto (la parte borrada gana), revirtiendo la restauración.
+ *
+ * Silenciosa si no hay sesión: lo local ya quedó restaurado.
+ */
+export async function autoRestoreTasks(tasks: Task[]): Promise<void> {
+  if (tasks.length === 0) return;
+  const userId = await sessionUserId();
+  if (!userId) return;
+  const ids = tasks.map((t) => t.id);
+  const [{ error: tombErr }, { error }] = await Promise.all([
+    supabase.from("tombstones").delete().in("id", ids),
+    supabase
+      .from("tasks")
+      .upsert(
+        tasks.map((t) => ({
+          ...toRemote(t as unknown as Record<string, unknown>),
+          deleted_at: null,
+          user_id: userId,
+        })),
+      ),
+  ]);
+  if (tombErr) console.error("AutoSync restore error (tombstones):", tombErr);
+  if (error) console.error("AutoSync restore error (tasks bulk):", error);
+}

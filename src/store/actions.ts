@@ -3,7 +3,7 @@ import type { ParsedCapture } from "@/parsers/capture";
 import type { Project, Task } from "@/domain/types";
 import { nextOccurrence } from "@/domain/recurrence";
 import { toISODate, parseISODate } from "@/domain/dateutils";
-import { autoPushTask, autoPushProject, autoPushTasks, autoPushDeleteTask, autoPushDeleteProject } from "./sync";
+import { autoPushTask, autoPushProject, autoPushTasks, autoPushDeleteTask, autoPushDeleteProject, autoRestoreTasks } from "./sync";
 import { randomColor } from "@/domain/color";
 
 export async function createProject(name: string, color: string): Promise<Project> {
@@ -105,25 +105,67 @@ export async function toggleTask(task: Task): Promise<void> {
   if (updated) void autoPushTask(updated);
 }
 
+/**
+ * Recojo TODA la descendencia de un id (hijos, nietos...): el plan tiene 3
+ * niveles y antes solo se marcaban los hijos directos, dejando huérfanas vivas
+ * a los sub-subtasks al borrar «Plan del día».
+ */
+async function collectDescendants(rootId: string): Promise<Task[]> {
+  const out: Task[] = [];
+  const queue = [rootId];
+  while (queue.length > 0) {
+    const parentId = queue.shift() as string;
+    const children = await db.tasks.where("parentId").equals(parentId).toArray();
+    out.push(...children);
+    queue.push(...children.map((c) => c.id));
+  }
+  return out;
+}
+
 export async function deleteTask(id: string): Promise<void> {
-  // Elimina también subtareas con borrado suave
-  const subtasks = await db.tasks.where("parentId").equals(id).toArray();
+  // Borrado suave en cascada: la tarea y TODA su descendencia.
+  const root = await db.tasks.get(id);
+  const toDelete = [...(root ? [root] : []), ...(await collectDescendants(id))];
 
   await db.transaction("rw", db.tasks, db.tombstones, async () => {
     const now = stampNow();
-    // Marcamos subtareas como borradas
-    await db.tasks.where("parentId").equals(id).modify({ deletedAt: now });
-    for (const st of subtasks) {
-      await db.tasks.update(st.id, { deletedAt: now });
-      await db.tombstones.put({ id: st.id, kind: "tasks", updatedAt: now });
+    for (const t of toDelete) {
+      await db.tasks.update(t.id, { deletedAt: now });
+      await db.tombstones.put({ id: t.id, kind: "tasks", updatedAt: now });
     }
-    // Marcamos la tarea principal como borrada
-    await db.tasks.update(id, { deletedAt: now });
-    await db.tombstones.put({ id, kind: "tasks", updatedAt: now });
   });
 
-  void autoPushDeleteTask(id);
-  subtasks.forEach(st => void autoPushDeleteTask(st.id));
+  // La nube también se entera vía las tumbas.
+  for (const t of toDelete) void autoPushDeleteTask(t.id);
+}
+
+/**
+ * Deshace un borrado: restaura la tarea y TODA su descendencia borrada
+ * (la cascada de `deleteTask` se deshace entera).
+ *
+ * Lo local se limpia en una transacción (quito `deletedAt` y las tumbas
+ * locales) y luego se sincroniza: sin borrar las tumbas remotas y subir
+ * `deleted_at: null`, el siguiente pull volvería a borrarlo todo.
+ */
+export async function restoreTask(id: string): Promise<void> {
+  const root = await db.tasks.get(id);
+  if (!root) return;
+
+  const toRestore = [root, ...(await collectDescendants(id))].filter((t) => t.deletedAt);
+  if (toRestore.length === 0) return;
+
+  const now = stampNow();
+  const restored: Task[] = [];
+  await db.transaction("rw", db.tasks, db.tombstones, async () => {
+    for (const t of toRestore) {
+      const fresh: Task = { ...t, deletedAt: undefined, updatedAt: now };
+      restored.push(fresh);
+      await db.tasks.put(fresh);
+      await db.tombstones.delete(["tasks", t.id]);
+    }
+  });
+
+  void autoRestoreTasks(restored);
 }
 
 export async function addSubtask(parent: Task, title: string): Promise<Task> {

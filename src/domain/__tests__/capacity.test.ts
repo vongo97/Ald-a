@@ -60,6 +60,19 @@ describe("dayCapacity", () => {
     );
     expect(r.committedMin).toBe(0);
   });
+
+  it("ignora tareas borradas (soft delete con deletedAt)", () => {
+    const r = dayCapacity(
+      [
+        makeTask({ dueDate: "2026-09-22", durationMin: 200, deletedAt: new Date().toISOString() }),
+        makeTask({ dueDate: "2026-09-22", durationMin: 200 }),
+      ],
+      "2026-09-22",
+      300,
+    );
+    expect(r.committedMin).toBe(200);
+    expect(r.overbooked).toBe(false);
+  });
 });
 
 describe("estimateDuration", () => {

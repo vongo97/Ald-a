@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useStore } from "@/store/useStore";
 import { db } from "@/store/db";
-import { toggleTask, deleteTask, addSubtask, updateTask } from "@/store/actions";
+import { toggleTask, deleteTask, restoreTask, addSubtask, updateTask } from "@/store/actions";
 import { toggleWithUndo } from "@/store/useStore";
 import { priorityScore } from "@/domain/priority";
 import { formatLocalDate, parseISODate, toISODate, startOfDay } from "@/domain/dateutils";
@@ -21,7 +21,12 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
   const [editDuration, setEditDuration] = useState<number | undefined>(task.durationMin);
 
   const subtasks = useLiveQuery(
-    () => db.tasks.where("parentId").equals(task.id).sortBy("order"),
+    () =>
+      db.tasks
+        .where("parentId")
+        .equals(task.id)
+        .filter((s) => !s.deletedAt)
+        .sortBy("order"),
     [task.id],
     [],
   );
@@ -248,7 +253,10 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                   className="btn-danger py-1 text-xs"
                   onClick={() => {
                     void deleteTask(task.id);
-                    pushToast("Tarea eliminada");
+                    // Con deshacer: recupera la tarea y sus subtareas de golpe.
+                    pushToast("Tarea eliminada", () => {
+                      void restoreTask(task.id);
+                    });
                   }}
                 >
                   Eliminar

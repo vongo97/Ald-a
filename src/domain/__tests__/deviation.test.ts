@@ -29,6 +29,14 @@ describe("overdueTasks", () => {
     const overdue = overdueTasks(tasks, NOW);
     expect(overdue.map((t) => t.id)).toEqual(["a"]);
   });
+
+  it("ignora las tareas borradas (soft delete con deletedAt)", () => {
+    const tasks = [
+      makeTask({ id: "a", dueDate: "2026-09-21" }),
+      makeTask({ id: "b", dueDate: "2026-09-20", deletedAt: "2026-09-21T10:00:00.000Z" }),
+    ];
+    expect(overdueTasks(tasks, NOW).map((t) => t.id)).toEqual(["a"]);
+  });
 });
 
 describe("proposeReprogramming", () => {
@@ -48,5 +56,20 @@ describe("proposeReprogramming", () => {
 
   it("sin vencidas no propone nada", () => {
     expect(proposeReprogramming([makeTask({ dueDate: "2026-09-22" })], NOW)).toEqual([]);
+  });
+
+  it("las tareas borradas no ocupan carga en los días propuestos", () => {
+    // Una borrada de 200 min NO debe empujar la vencida al día siguiente.
+    const tasks = [
+      makeTask({ id: "a", dueDate: "2026-09-21", durationMin: 200 }),
+      makeTask({
+        id: "borrada",
+        dueDate: "2026-09-22",
+        durationMin: 200,
+        deletedAt: "2026-09-21T10:00:00.000Z",
+      }),
+    ];
+    const proposals = proposeReprogramming(tasks, NOW);
+    expect(proposals).toEqual([{ taskId: "a", fromDate: "2026-09-21", toDate: "2026-09-22" }]);
   });
 });

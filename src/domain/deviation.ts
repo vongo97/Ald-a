@@ -7,10 +7,12 @@ export interface ReprogramProposal {
   toDate: string;
 }
 
-/** Tareas activas cuya fecha ya pasó. */
+/** Tareas activas cuya fecha ya pasó. Ignora las borradas (soft delete). */
 export function overdueTasks(tasks: Task[], now: Date = new Date()): Task[] {
   const today = toISODate(startOfDay(now));
-  return tasks.filter((t) => t.status === "todo" && t.dueDate && t.dueDate < today);
+  return tasks.filter(
+    (t) => t.status === "todo" && t.dueDate && t.dueDate < today && !t.deletedAt,
+  );
 }
 
 /** Propone mover tareas vencidas a hoy y siguientes días libres (en orden de prioridad declarada). */
@@ -21,7 +23,7 @@ export function proposeReprogramming(tasks: Task[], now: Date = new Date()): Rep
   const today = startOfDay(now);
   const load = new Map<string, number>();
   for (const t of tasks) {
-    if (t.status === "todo" && t.dueDate && !t.parentId) {
+    if (t.status === "todo" && t.dueDate && !t.parentId && !t.deletedAt) {
       load.set(t.dueDate, (load.get(t.dueDate) ?? 0) + (t.durationMin ?? 45));
     }
   }

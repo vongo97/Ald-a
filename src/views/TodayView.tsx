@@ -3,8 +3,10 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/store/db";
 import { sortBySuggested } from "@/domain/priority";
 import { dayCapacity, formatMinutes } from "@/domain/capacity";
+import { topmostDeleted } from "@/domain/trash";
 import { useOverdue } from "@/store/useOverdue";
 import { useStore } from "@/store/useStore";
+import { restoreTask } from "@/store/actions";
 import SortableTaskList from "@/components/SortableTaskList";
 import { toISODate, startOfDay } from "@/domain/dateutils";
 
@@ -21,6 +23,26 @@ export default function TodayView() {
     const base = allTasks.filter((t) => t.dueDate === today && t.status === "todo" && !t.deletedAt);
     return sortBySuggested(base);
   }, [allTasks, today]);
+
+  // Borradas de hoy (soft delete): existen, pero la vista las oculta.
+  // El aviso las saca a la luz y permite restaurarlas sin salir de aquí.
+  const deletedToday = useMemo(
+    () =>
+      (allTasks ?? []).filter((t) => t.dueDate === today && t.status === "todo" && !!t.deletedAt),
+    [allTasks, today],
+  );
+
+  const restoreDeletedToday = () => {
+    // Restauro las RAÍCES de cada rama (subir al ancestro borrado más alto);
+    // restoreTask recupera toda la rama de una vez.
+    const rootIds = new Set(deletedToday.map((t) => topmostDeleted(allTasks ?? [], t).id));
+    void (async () => {
+      for (const rootId of rootIds) await restoreTask(rootId);
+      pushToast(
+        `${deletedToday.length} tarea${deletedToday.length === 1 ? "" : "s"} de hoy restaurada${deletedToday.length === 1 ? "" : "s"}`,
+      );
+    })();
+  };
 
   const capacity = useMemo(() => dayCapacity(allTasks ?? [], today), [allTasks, today]);
   // La misma fuente que usa el modal: una sola definición de "vencida".
@@ -67,6 +89,22 @@ export default function TodayView() {
         <div className="card mb-4 border-rose-500/40 light:border-rose-300 bg-rose-500/10 light:bg-rose-50 p-3 text-sm text-rose-200 light:text-rose-700">
           🔋 Tu plan de hoy no cabe: {formatMinutes(capacity.committedMin + capacity.estimatedMin)} de{" "}
           {formatMinutes(capacity.capacityMin)} disponibles. Considera mover algo a mañana.
+        </div>
+      )}
+
+      {deletedToday.length > 0 && (
+        <div className="card mb-4 p-3">
+          <p className="text-sm text-muted">
+            🗑️ {deletedToday.length} tarea{deletedToday.length === 1 ? "" : "s"} de hoy en la papelera: no han
+            desaparecido, están borradas.
+            {todays.length === 0 && " Restáuralas y el día vuelve a llenarse."}
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button type="button" className="btn-primary text-xs" onClick={restoreDeletedToday}>
+              ♻️ Restaurar{todays.length === 0 ? " todo" : ""}
+            </button>
+            <span className="self-center text-xs text-muted">también en Revisión → 🗑️ Papelera</span>
+          </div>
         </div>
       )}
 

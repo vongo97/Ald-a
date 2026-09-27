@@ -16,7 +16,11 @@ export function dayCapacity(
   date: string, // ISO
   capacityMin: number = Math.round(DEFAULT_CAPACITY_MIN * UNPLANNED_SHARE),
 ): CapacityReport {
-  const active = tasks.filter((t) => t.status === "todo" && t.dueDate === date && !t.parentId);
+  // Mismo criterio que TodayView: excluir borradas (soft delete con deletedAt),
+  // si no el aviso "no cabe" suma tareas que ya no se ven en la lista.
+  const active = tasks.filter(
+    (t) => t.status === "todo" && t.dueDate === date && !t.parentId && !t.deletedAt,
+  );
   let committedMin = 0;
   let estimatedMin = 0;
   for (const t of active) {

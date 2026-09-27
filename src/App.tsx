@@ -79,10 +79,17 @@ function AppInner() {
     })();
   }, [session]);
 
-  // Tareas pendientes de hoy para el badge
+  // Tareas pendientes de hoy para el badge.
+  // IMPORTANTE: excluir borradas (deletedAt) — igual que TodayView, si no
+  // el badge muestra pendientes que en la vista Hoy no aparecen.
   const today = toISODate(startOfDay(new Date()));
   const pendingToday = useLiveQuery(
-    () => db.tasks.where("dueDate").equals(today).filter((t) => t.status === "todo").count(),
+    () =>
+      db.tasks
+        .where("dueDate")
+        .equals(today)
+        .filter((t) => t.status === "todo" && !t.deletedAt)
+        .count(),
     [today],
     0,
   );
