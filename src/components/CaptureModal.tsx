@@ -95,7 +95,12 @@ export default function CaptureModal() {
       setImproving(false);
 
       if (structured) {
-        const parent = await createTaskFromCapture(structured.parsed);
+        // El párrafo original se conserva en `notes` si la IA lo acortó.
+        const original = text.trim();
+        const parent = await createTaskFromCapture(
+          structured.parsed,
+          original !== structured.parsed.title ? { notes: original } : {},
+        );
         const n = structured.subtasks.length;
         if (n > 0) await addSubtasks(parent, structured.subtasks);
         pushToast(

@@ -101,7 +101,9 @@ export async function improveCapture(ctx: LlmContext, input: string): Promise<Ll
       `${SYSTEM_JSON}\nDevuelve SOLO el objeto JSON crudo, sin explicaciones, sin markdown, sin código.`,
       now,
     ),
-    maxTokens: 800,
+    // Holgura para que el JSON (título + subtareas con horario) no se corte
+    // con textos de muchos actividades.
+    maxTokens: 1400,
     user: `Interpreta esta captura de tarea escrita en español y normalízala.
 Captura: "${input}"
 Responde exactamente con este objeto JSON (y ningún otro texto):

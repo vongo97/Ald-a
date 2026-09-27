@@ -22,6 +22,8 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/store/db";
 import { pullAndSyncFromSupabase } from "@/store/sync";
 import { purgeExpiredTrash } from "@/store/purge";
+import { autoBreakdownBlobs } from "@/store/autoBreakdown";
+import { settingsRepo } from "@/store/settings";
 import { toISODate, startOfDay } from "@/domain/dateutils";
 import {
   notificationsSupported,
@@ -95,6 +97,25 @@ function AppInner() {
       }
     })();
   }, [session]);
+
+  // Desglose automático: las capturas que quedaron como bloque de texto
+  // (título gigante) se estructuran solas al arrancar — título corto +
+  // subtareas — sin pulsar «Desglosar». Acotado y sin repetir: véase
+  // autoBreakdown. Si la IA falla, se reintenta en el próximo arranque.
+  useEffect(() => {
+    void autoBreakdownBlobs(settingsRepo.load()).then((r) => {
+      if (!r) return;
+      if (r.fixed > 0) {
+        pushToast(
+          r.subtasks > 0
+            ? `✨ Desglose automático: ${r.fixed} tarea${r.fixed !== 1 ? "s" : ""} estructurada${r.fixed !== 1 ? "s" : ""} · +${r.subtasks} subtareas`
+            : `✨ Desglose automático: ${r.fixed} título${r.fixed !== 1 ? "s" : ""} largo${r.fixed !== 1 ? "s" : ""} acortado`,
+        );
+      } else {
+        pushToast(`⚠️ Desglose automático: ${r.error ?? "la IA no respondió"} — se reintentará en el próximo arranque`);
+      }
+    });
+  }, [pushToast]);
 
   // Tareas pendientes de hoy para el badge.
   // IMPORTANTE: excluir borradas (deletedAt) — igual que TodayView, si no
