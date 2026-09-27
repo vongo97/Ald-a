@@ -107,10 +107,12 @@ async function getUserId(): Promise<string | null> {
  * Sube el perfil cifrado a Supabase.
  * Tabla necesaria: user_profiles (id uuid PK, encrypted text, updated_at timestamptz)
  */
-export async function pushProfile(): Promise<boolean> {
+export async function pushProfile(): Promise<{ ok: boolean; error?: string }> {
   const userId = await getUserId();
+  if (!userId) return { ok: false, error: "No hay sesión de Supabase activa" };
+
   const profile = loadProfile();
-  if (!userId || !profile) return false;
+  if (!profile) return { ok: false, error: "No hay perfil guardado localmente" };
 
   try {
     const encrypted = await encryptProfile(profile, userId);
@@ -121,9 +123,16 @@ export async function pushProfile(): Promise<boolean> {
         encrypted,
         updated_at: profile.updatedAt,
       });
-    return !error;
-  } catch {
-    return false;
+
+    if (error) {
+      if (error.code === "42P01" || error.message?.includes("does not exist")) {
+        return { ok: false, error: "Tabla user_profiles no existe — ejecuta la migración 0006 en Supabase" };
+      }
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 

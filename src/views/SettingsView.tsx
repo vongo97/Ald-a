@@ -536,8 +536,12 @@ function ProfileSettingsSection() {
   };
 
   const handleSync = async () => {
-    const ok = await pushProfile();
-    pushToast(ok ? "Perfil sincronizado con la nube" : "No se pudo sincronizar (¿iniciaste sesión?)");
+    const result = await pushProfile();
+    if (result.ok) {
+      pushToast("Perfil sincronizado con la nube ☁️");
+    } else {
+      pushToast(`No se pudo sincronizar: ${result.error ?? "error desconocido"}`);
+    }
   };
 
   if (editing || !profile) {
