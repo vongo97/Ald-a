@@ -29,7 +29,7 @@ IMPORTANTE: Responde SIEMPRE en español. Todos los títulos, razones y adverten
 
 REGLAS:
 1. Detecta la fecha: "mañana", "hoy", "el lunes", "domingo", etc. Si no hay fecha, usa la fecha de referencia {today}.
-2. Detecta actividades y ordénalas lógicamente. Los títulos deben estar en el mismo idioma del texto del usuario.
+2. Detecta actividades y ordénalas lógicamente. Los títulos van SIEMPRE en español (aunque el texto del usuario esté en otro idioma).
 3. Asigna horas de inicio y fin (formato "HH:mm" 24h) basándote en:
    - Pistas temporales del texto ("primera vez del día" = mañana temprano, "después de X" = posterior a X)
    - Sentido común (pasear perros temprano, trabajo en horario laboral, ejercicio por la mañana o tarde)

@@ -7,7 +7,9 @@ export interface SubtaskSuggestion {
   durationMin?: number;
 }
 
-const SYSTEM_JSON = `Eres un asistente de productividad. Respondes SOLO con JSON válido, sin explicaciones ni markdown adicional. Fecha de referencia: {today}.`;
+const SYSTEM_JSON = `Eres un asistente de productividad. Respondes SOLO con JSON válido, sin explicaciones ni markdown adicional.
+IMPORTANTE: respondes SIEMPRE en español. Todos los textos, títulos, nombres y descripciones que devuelves van en español, aunque el texto del usuario esté en otro idioma.
+Fecha de referencia: {today}.`;
 
 function withToday(system: string, now: Date): string {
   return system.replace("{today}", now.toISOString().slice(0, 10));
@@ -26,7 +28,7 @@ export async function breakdownTask(
 Tarea: "${task.title}"
 ${task.notes ? `Notas: ${task.notes}` : ""}
 Devuelve: {"subtasks":[{"title":"...","durationMin":30}]}
-"duracionMin" en minutos (opcional). Si no es posible desglosarla, devuelve una lista vacía.`,
+"duracionMin" en minutos (opcional). Los "title" van SIEMPRE en español. Si no es posible desglosarla, devuelve una lista vacía.`,
   });
   if (!res.ok || !res.data) return { ok: false, error: res.error, usedLlm: res.usedLlm };
   const parsed = extractJson<{ subtasks?: SubtaskSuggestion[] }>(res.data);

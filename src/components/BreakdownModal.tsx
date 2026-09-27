@@ -39,6 +39,10 @@ export default function BreakdownModal({
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, title } : item)));
   };
 
+  const updateDuration = (id: string, durationMin?: number) => {
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, durationMin } : item)));
+  };
+
   const removeItem = (id: string) => {
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
@@ -102,9 +106,21 @@ export default function BreakdownModal({
                 placeholder="Título de la subtarea..."
                 className="input py-1 text-xs flex-1"
               />
-              {item.durationMin ? (
-                <span className="shrink-0 text-xs text-muted">{item.durationMin}m</span>
-              ) : null}
+              {/* Duración editable: cuánto tiempo toma cada subtarea */}
+              <input
+                type="number"
+                min="0"
+                step="5"
+                inputMode="numeric"
+                value={item.durationMin ?? ""}
+                onChange={(e) =>
+                  updateDuration(item.id, e.target.value ? Number(e.target.value) : undefined)
+                }
+                className="input w-16 shrink-0 py-1 text-right text-xs"
+                placeholder="min"
+                aria-label="Duración en minutos"
+                title="Duración en minutos"
+              />
               <button
                 type="button"
                 onClick={() => removeItem(item.id)}

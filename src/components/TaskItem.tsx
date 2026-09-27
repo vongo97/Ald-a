@@ -8,11 +8,14 @@ import { priorityScore } from "@/domain/priority";
 import { formatLocalDate, parseISODate, toISODate, startOfDay } from "@/domain/dateutils";
 import type { Task } from "@/domain/types";
 import BreakdownButton from "./BreakdownButton";
+import SubtaskTimePanel from "./SubtaskTimePanel";
 
 export default function TaskItem({ task, showScore = false }: { task: Task; showScore?: boolean }) {
   const pushToast = useStore((s) => s.pushToast);
   const [expanded, setExpanded] = useState(false);
   const [subtaskText, setSubtaskText] = useState("");
+  // Id de la subtarea con el panel de horario abierto (una a la vez).
+  const [timePanel, setTimePanel] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
   const [editNotes, setEditNotes] = useState(task.notes ?? "");
@@ -203,14 +206,42 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
               {subtasks && subtasks.length > 0 && (
                 <ul className="mb-2 space-y-1">
                   {subtasks.map((st) => (
-                    <li key={st.id} className="flex items-center gap-2 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => void toggleWithUndo(st, toggleTask, pushToast)}
-                        className={`h-3.5 w-3.5 rounded-full border ${st.status === "done" ? "border-emerald-400 light:border-emerald-300 bg-emerald-400" : "border-theme"}`}
-                        aria-label="Completar subtarea"
-                      />
-                      <span className={st.status === "done" ? "line-through text-muted" : ""}>{st.title}</span>
+                    <li key={st.id} className="text-xs">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void toggleWithUndo(st, toggleTask, pushToast)}
+                          className={`h-3.5 w-3.5 shrink-0 rounded-full border ${st.status === "done" ? "border-emerald-400 light:border-emerald-300 bg-emerald-400" : "border-theme"}`}
+                          aria-label="Completar subtarea"
+                        />
+                        <span
+                          className={`min-w-0 flex-1 truncate ${st.status === "done" ? "line-through text-muted" : ""}`}
+                        >
+                          {st.title}
+                        </span>
+                        {/* Panel de horario: duración y bloque de cada subtarea */}
+                        <button
+                          type="button"
+                          onClick={() => setTimePanel((v) => (v === st.id ? null : st.id))}
+                          className="chip shrink-0 bg-surface-hover text-primary hover:opacity-75"
+                          title="Editar horario de la subtarea"
+                          aria-label="Editar horario de la subtarea"
+                          aria-expanded={timePanel === st.id}
+                        >
+                          {st.timeBlock
+                            ? `🕒 ${st.timeBlock.start}–${st.timeBlock.end}`
+                            : st.durationMin
+                              ? `⏱ ${st.durationMin}m`
+                              : "🕒 Horario"}
+                        </button>
+                      </div>
+                      {timePanel === st.id && (
+                        <SubtaskTimePanel
+                          task={st}
+                          parentDueDate={task.dueDate}
+                          onClose={() => setTimePanel(null)}
+                        />
+                      )}
                     </li>
                   ))}
                 </ul>
