@@ -62,12 +62,24 @@ Devuelve: {"subtasks":[{"title":"...","durationMin":30${profile ? ',"start":"HH:
 "duracionMin" en minutos (opcional). Los "title" van SIEMPRE en español. Si no es posible desglosarla, devuelve una lista vacía.${routine}`,
   });
   if (!res.ok || !res.data) return { ok: false, error: res.error, usedLlm: res.usedLlm };
-  const parsed = extractJson<{ subtasks?: SubtaskSuggestion[] }>(res.data);
-  const rawSubs = Array.isArray(parsed?.subtasks) ? (parsed!.subtasks as unknown[]) : [];
+  // Respuesta sin JSON (o sin ninguna lista) → error VISIBLE, no una lista
+  // vacía silenciosa que acaba en «sin sugerencias» sin motivo.
+  const parsed = extractJson<unknown>(res.data);
+  if (parsed === null || (typeof parsed !== "object" && !Array.isArray(parsed))) {
+    return { ok: false, error: "Respuesta del modelo no interpretable", usedLlm: true };
+  }
+  const raw = (Array.isArray(parsed) ? {} : parsed) as Record<string, unknown>;
+  const list: unknown = Array.isArray(parsed)
+    ? parsed
+    : [raw.subtasks, raw.pasos, raw.actividades, raw.steps].find((c) => Array.isArray(c));
+  if (!Array.isArray(list)) {
+    return { ok: false, error: "Respuesta del modelo no interpretable", usedLlm: true };
+  }
   const subtasks: SubtaskSuggestion[] = [];
-  for (const s of rawSubs) {
+  for (const s of list) {
+    const title = pickSubtaskTitle(s);
+    if (!title) continue;
     const o = (s ?? {}) as Record<string, unknown>;
-    if (typeof o.title !== "string" || !o.title.trim()) continue;
     const dur =
       typeof o.durationMin === "number"
         ? o.durationMin
@@ -75,7 +87,7 @@ Devuelve: {"subtasks":[{"title":"...","durationMin":30${profile ? ',"start":"HH:
           ? Number(o.durationMin)
           : undefined;
     subtasks.push({
-      title: o.title.trim(),
+      title,
       ...(dur && dur > 0 ? { durationMin: dur } : {}),
       start: hhmm(o.start),
       end: hhmm(o.end),
@@ -137,6 +149,14 @@ function hhmm(v: unknown): string | undefined {
   return typeof v === "string" && /^\d{1,2}:\d{2}$/.test(v.trim()) ? v.trim() : undefined;
 }
 
+/** Título de una subtarea: tolera "title"/"título"/"titulo" o un string suelto. */
+function pickSubtaskTitle(s: unknown): string {
+  if (typeof s === "string") return s.trim();
+  const o = (s ?? {}) as Record<string, unknown>;
+  const v = [o.title, o["título"], o.titulo].find((x) => typeof x === "string" && x.trim());
+  return typeof v === "string" ? v.trim() : "";
+}
+
 /** Segunda opinión del LLM para una captura ambigua.
  *
  * Si la captura es un párrafo (p. ej. un día descrito completo), devuelve
@@ -180,13 +200,15 @@ Si describe VARIAS actividades o un día completo, pon en "title" un resumen cor
   if (!title) {
     return { ok: false, error: "Respuesta del modelo no interpretable", usedLlm: true };
   }
-  // Subtareas: solo títulos no vacíos; horas validadas a HH:mm.
+  // Subtareas: títulos no vacíos (claves "title"/"título"/"titulo" o string
+  // suelto); horas validadas a HH:mm.
   const rawSubs = Array.isArray(raw.subtasks) ? (raw.subtasks as unknown[]) : [];
   const subtasks: CaptureSubtask[] = [];
   for (const s of rawSubs) {
+    const title = pickSubtaskTitle(s);
+    if (!title) continue;
     const o = (s ?? {}) as Record<string, unknown>;
-    if (typeof o.title !== "string" || !o.title.trim()) continue;
-    subtasks.push({ title: o.title.trim(), start: hhmm(o.start), end: hhmm(o.end) });
+    subtasks.push({ title, start: hhmm(o.start), end: hhmm(o.end) });
   }
   return { ok: true, data: { ...parsed, title, subtasks: subtasks.length ? subtasks : undefined }, usedLlm: true };
 }

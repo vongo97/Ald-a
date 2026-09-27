@@ -79,6 +79,14 @@ describe("improveCapture", () => {
     expect(res.data?.subtasks).toBeUndefined();
   });
 
+  it("subtareas con clave en español «titulo» se aceptan", async () => {
+    const fetchFn = llm(
+      JSON.stringify({ title: "Día", subtasks: [{ titulo: "Desayunar", start: "07:00" }] }),
+    );
+    const res = await improveCapture({ settings, fetchFn }, LONG);
+    expect(res.data?.subtasks?.[0]).toMatchObject({ title: "Desayunar", start: "07:00" });
+  });
+
   it("título alternativo «título» se acepta; sin ningún título → error", async () => {
     const fetchFn = llm(JSON.stringify({ "título": "Llamar al dentist", subtasks: [] }));
     const ok = await improveCapture({ settings, fetchFn }, "llamar al dentist");
@@ -151,5 +159,44 @@ describe("breakdownTask", () => {
 
     const [, init] = fetchFn.mock.calls[0] as [string, RequestInit];
     expect(String(init.body)).not.toContain("HH:mm");
+  });
+
+  it("respuesta sin JSON interpretable → error VISIBLE (nunca lista vacía muda)", async () => {
+    const fetchFn = llm("Lo siento, no puedo desglosar eso porque…");
+    const res = await breakdownTask({ settings, fetchFn }, { title: "Cualquiera" });
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe("Respuesta del modelo no interpretable");
+  });
+
+  it("JSON sin ninguna lista de subtareas → error visible", async () => {
+    const fetchFn = llm(JSON.stringify({ foo: 1 }));
+    const res = await breakdownTask({ settings, fetchFn }, { title: "Cualquiera" });
+    expect(res.ok).toBe(false);
+  });
+
+  it("lista vacía declarada → ok con [] (motivo legítimo, no error)", async () => {
+    const fetchFn = llm(JSON.stringify({ subtasks: [] }));
+    const res = await breakdownTask({ settings, fetchFn }, { title: "Vaga" });
+    expect(res.ok).toBe(true);
+    expect(res.data).toEqual([]);
+  });
+
+  it("tolera claves en español, array suelto y pasos como string", async () => {
+    const fetchFn = llm(
+      JSON.stringify([
+        { titulo: "Paso con acento", durationMin: 20 },
+        { pasos: "no soy objeto" },
+        "Paso escrito como string",
+      ]),
+    );
+    const res = await breakdownTask({ settings, fetchFn }, { title: "X" });
+    expect(res.data?.map((s) => s.title)).toEqual(["Paso con acento", "Paso escrito como string"]);
+    expect(res.data?.[0]?.durationMin).toBe(20);
+  });
+
+  it("clave alternativa «pasos» también se acepta", async () => {
+    const fetchFn = llm(JSON.stringify({ pasos: [{ title: "A" }, { title: "B" }] }));
+    const res = await breakdownTask({ settings, fetchFn }, { title: "X" });
+    expect(res.data).toHaveLength(2);
   });
 });

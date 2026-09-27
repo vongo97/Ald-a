@@ -22,23 +22,36 @@ export default function BreakdownButton({ task }: { task: Task }) {
     try {
       const ctx: LlmContext = { settings };
       let titles: SubtaskSuggestion[] = [];
+      // Motivo por el que la IA no aportó: al final se explica en el aviso
+      // (antes una respuesta ilegible acababa en «sin sugerencias» a secas).
+      let aiFail: string | null = null;
+      let aiEmpty = false;
       if (settings.apiKey.trim()) {
         // Con perfil, la IA propone además horario (hora de inicio) según la
         // rutina del usuario; sin perfil, solo títulos y duración.
         const res = await breakdownTask(ctx, task, loadProfile());
-        if (res.ok && res.data) {
-          titles = res.data;
+        if (res.ok) {
+          titles = res.data ?? [];
+          aiEmpty = titles.length === 0;
         } else {
-          pushToast(`IA no disponible (${res.error ?? "error"}). Usando plantilla local.`);
+          aiFail = res.error ?? "error desconocido";
         }
       }
       if (titles.length === 0) {
         titles = localBreakdown(task.title).map((t) => ({ title: t }));
       }
       if (titles.length === 0) {
-        pushToast("Sin sugerencias para esta tarea");
+        const short = task.title.length > 30 ? `${task.title.slice(0, 30)}…` : task.title;
+        pushToast(
+          aiFail
+            ? `Sin sugerencias: la IA falló (${aiFail}) y la plantilla local no conoce esta tarea`
+            : aiEmpty
+              ? `Sin sugerencias: ni la IA ni la plantilla local supieron desglosar «${short}»`
+              : `Sin sugerencias: sin IA configurada la plantilla local no conoce «${short}» — actívala en Ajustes`,
+        );
         return;
       }
+      if (aiFail) pushToast(`IA no disponible (${aiFail}) — uso la plantilla local`);
       setSuggestions(titles);
       setModalOpen(true);
     } finally {
