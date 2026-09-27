@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Task, ViewId } from "@/domain/types";
 import type { Session } from "@supabase/supabase-js";
 import { db } from "./db";
+import { supabase } from "./supabase";
 import { applyTheme, persistTheme, readThemePref, type ThemePref } from "./theme";
 
 export interface Toast {
@@ -85,7 +86,6 @@ export const useStore = create<StoreState>((set) => ({
     })),
   loadSession: async () => {
     try {
-      const { supabase } = await import("./supabase");
       const { data } = await supabase.auth.getSession();
       set({ session: data.session });
     } catch {

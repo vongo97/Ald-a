@@ -21,6 +21,21 @@ export default defineConfig({
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes("node_modules/@supabase")) return "vendor-supabase";
+          if (id.includes("node_modules/dexie")) return "vendor-dexie";
+          if (id.includes("node_modules/@dnd-kit")) return "vendor-dnd";
+          if (id.includes("node_modules/react") || id.includes("node_modules/scheduler"))
+            return "vendor-react";
+          return undefined;
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600,
+  },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],

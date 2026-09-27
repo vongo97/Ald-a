@@ -10,6 +10,7 @@ import {
   requestNotifPermission,
 } from "@/notifications/notifier";
 import { exportDataToJSON, importDataFromJSON } from "@/store/sync";
+import { supabase } from "@/store/supabase";
 
 export default function SettingsView() {
   const { settings, saveSettings } = useSettings();
@@ -451,7 +452,6 @@ export default function SettingsView() {
                 type="button"
                 className="btn-ghost text-xs text-rose-400 light:text-rose-600"
                 onClick={async () => {
-                  const { supabase } = await import("@/store/supabase");
                   await supabase.auth.signOut();
                   await loadSession();
                   pushToast("Sesión cerrada");
@@ -474,7 +474,6 @@ export default function SettingsView() {
                   disabled={authLoading}
                   onClick={async () => {
                     setAuthLoading(true);
-                    const { supabase } = await import("@/store/supabase");
                     const { error } = await supabase.auth.signInWithOAuth({
                       provider: "google",
                       options: { redirectTo: window.location.origin }

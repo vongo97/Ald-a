@@ -16,6 +16,7 @@ import SettingsView from "@/views/SettingsView";
 import OverdueRescheduleModal from "@/components/OverdueRescheduleModal";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/store/db";
+import { pullAndSyncFromSupabase } from "@/store/sync";
 import { toISODate, startOfDay } from "@/domain/dateutils";
 import {
   notificationsSupported,
@@ -58,8 +59,8 @@ function AppInner() {
     const userId = session?.user?.id;
     if (!userId || pulledFor.current === userId) return;
     pulledFor.current = userId;
-    void import("@/store/sync").then(async (m) => {
-      const summary = await m.pullAndSyncFromSupabase();
+    void (async () => {
+      const summary = await pullAndSyncFromSupabase();
       // Avisos de conflictos: borrados que llegaron desde otro dispositivo.
       if (summary && summary.remoteDeletes > 0) {
         const n = summary.remoteDeletes;
@@ -69,7 +70,7 @@ function AppInner() {
             : `${n} tareas eliminadas desde otro dispositivo`,
         );
       }
-    });
+    })();
   }, [session]);
 
   // Tareas pendientes de hoy para el badge
