@@ -1,0 +1,328 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+// ─── Estado compartido de los mocks (hoisted para que esté disponible en vi.mock) ───
+const { mockData, mockSession, mockDb } = vi.hoisted(() => {
+  // Almacén en memoria que hace de Supabase
+  const mockData: Record<string, Record<string, unknown>[]> = {
+    tasks: [],
+    projects: [],
+    tombstones: [],
+  };
+  const mockSession = { userId: "user-1" as string | null };
+
+  // Almacén en memoria que hace de Dexie
+  const tables = {
+    tasks: new Map<string, Record<string, unknown>>(),
+    projects: new Map<string, Record<string, unknown>>(),
+    tombstones: new Map<string, Record<string, unknown>>(),
+  };
+
+  const makeTable = (store: Map<string, Record<string, unknown>>, keyFn: (r: Record<string, unknown>) => string) => ({
+    toArray: async () => [...store.values()],
+    get: async (key: string) => store.get(key),
+    put: async (row: Record<string, unknown>) => {
+      store.set(keyFn(row), row);
+      return keyFn(row);
+    },
+    update: async (key: string, changes: Record<string, unknown>) => {
+      const row = store.get(key);
+      if (!row) return 0;
+      Object.assign(row, changes);
+      return 1;
+    },
+    clear: async () => { store.clear(); },
+    bulkAdd: async (rows: Record<string, unknown>[]) => {
+      for (const r of rows) store.set(keyFn(r), r);
+    },
+    count: async () => store.size,
+  });
+
+  const mockDb = {
+    tasks: makeTable(tables.tasks, (r) => r.id as string),
+    projects: makeTable(tables.projects, (r) => r.id as string),
+    tombstones: makeTable(tables.tombstones, (r) => `${r.kind}+${r.id}`),
+    transaction: async (_mode: string, ...args: unknown[]) => {
+      const fn = args[args.length - 1] as () => Promise<void>;
+      await fn();
+    },
+    _tables: tables,
+  };
+
+  return { mockData, mockSession, mockDb };
+});
+
+// ─── Mock de Supabase ─────────────────────────────────────────────────────────
+vi.mock("../supabase", () => ({
+  supabase: {
+    auth: {
+      getSession: async () => ({
+        data: {
+          session: mockSession.userId ? { user: { id: mockSession.userId } } : null,
+        },
+      }),
+    },
+    from: (table: string) => ({
+      select: (_cols?: string) => Promise.resolve({ data: mockData[table] ?? [], error: null }),
+      upsert: (rows: Record<string, unknown> | Record<string, unknown>[]) => {
+        const arr = Array.isArray(rows) ? rows : [rows];
+        const store = mockData[table] ?? (mockData[table] = []);
+        for (const row of arr) {
+          const existing = store.find((r) => r.id === row.id);
+          if (existing) Object.assign(existing, row);
+          else store.push({ ...row });
+        }
+        return Promise.resolve({ error: null });
+      },
+    }),
+  },
+}));
+
+// ─── Mock de Dexie ────────────────────────────────────────────────────────────
+vi.mock("../db", () => ({
+  db: mockDb,
+  stampNow: () => new Date().toISOString(),
+  newId: () => crypto.randomUUID(),
+}));
+
+// ─── Mock de useStore (zustand) ──────────────────────────────────────────────
+const { mockSetSyncStatus } = vi.hoisted(() => ({
+  mockSetSyncStatus: vi.fn(),
+}));
+vi.mock("../useStore", () => ({
+  useStore: {
+    getState: () => ({ setSyncStatus: mockSetSyncStatus }),
+  },
+}));
+
+// Importar DESPUÉS de los mocks
+import { toRemote, stripRemote, needsPush, pullAndSyncFromSupabase } from "../sync";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function resetAll() {
+  mockData.tasks.length = 0;
+  mockData.projects.length = 0;
+  mockData.tombstones.length = 0;
+  mockDb._tables.tasks.clear();
+  mockDb._tables.projects.clear();
+  mockDb._tables.tombstones.clear();
+  mockSession.userId = "user-1";
+  mockSetSyncStatus.mockClear();
+}
+
+beforeEach(resetAll);
+
+// ─── toRemote: camelCase → snake_case ────────────────────────────────────────
+describe("toRemote", () => {
+  it("convierte updatedAt → updated_at y deletedAt → deleted_at", () => {
+    const local = { id: "t1", title: "Hola", updatedAt: "2026-01-01T00:00:00Z", deletedAt: "2026-01-02T00:00:00Z" };
+    const remote = toRemote(local);
+    expect(remote).not.toHaveProperty("updatedAt");
+    expect(remote).not.toHaveProperty("deletedAt");
+    expect(remote.updated_at).toBe("2026-01-01T00:00:00Z");
+    expect(remote.deleted_at).toBe("2026-01-02T00:00:00Z");
+    expect(remote.id).toBe("t1");
+    expect(remote.title).toBe("Hola");
+  });
+
+  it("sin updatedAt/deletedAt no añade las claves snake_case", () => {
+    const remote = toRemote({ id: "t1", title: "Hola" });
+    expect(remote).not.toHaveProperty("updated_at");
+    expect(remote).not.toHaveProperty("deleted_at");
+  });
+
+  it("conserva el resto de campos camelCase (projectId, dueDate, etc.)", () => {
+    const remote = toRemote({ id: "t1", projectId: "p1", dueDate: "2026-01-01" });
+    expect(remote.projectId).toBe("p1");
+    expect(remote.dueDate).toBe("2026-01-01");
+  });
+});
+
+// ─── stripRemote: snake_case → camelCase ─────────────────────────────────────
+describe("stripRemote", () => {
+  it("convierte updated_at → updatedAt y deleted_at → deletedAt", () => {
+    const row = { id: "t1", title: "Hola", updated_at: "2026-01-01T00:00:00Z", deleted_at: "2026-01-02T00:00:00Z" };
+    const local = stripRemote<{ id: string; title: string; updatedAt?: string; deletedAt?: string }>(row);
+    expect(local).not.toHaveProperty("updated_at");
+    expect(local).not.toHaveProperty("deleted_at");
+    expect(local.updatedAt).toBe("2026-01-01T00:00:00Z");
+    expect(local.deletedAt).toBe("2026-01-02T00:00:00Z");
+  });
+
+  it("quita user_id (columna de servidor)", () => {
+    const local = stripRemote<Record<string, unknown>>({ id: "t1", user_id: "u1", updated_at: "x" });
+    expect(local).not.toHaveProperty("user_id");
+    expect(local.id).toBe("t1");
+  });
+
+  it("sin snake_case no añade camelCase", () => {
+    const local = stripRemote<Record<string, unknown>>({ id: "t1" });
+    expect(local).not.toHaveProperty("updatedAt");
+    expect(local).not.toHaveProperty("deletedAt");
+  });
+
+  it("idéntico a toRemote invertido", () => {
+    const original = { id: "t1", updatedAt: "2026-01-01T00:00:00Z", deletedAt: "2026-01-02T00:00:00Z" };
+    const roundtrip = stripRemote<typeof original>(toRemote(original));
+    expect(roundtrip).toEqual(original);
+  });
+});
+
+// ─── needsPush ───────────────────────────────────────────────────────────────
+describe("needsPush", () => {
+  it("la nube no la conoce → sí (creada offline)", () => {
+    expect(needsPush({ updatedAt: "2026-01-01T00:00:00Z" }, 0, false)).toBe(true);
+  });
+
+  it("la nube no tiene reloj pero lo local sí → sí", () => {
+    expect(needsPush({ updatedAt: "2026-01-01T00:00:00Z" }, 0, true)).toBe(true);
+  });
+
+  it("lo local es más reciente → sí", () => {
+    const localTime = Date.parse("2026-01-02T00:00:00Z");
+    const remoteTime = Date.parse("2026-01-01T00:00:00Z");
+    expect(needsPush({ updatedAt: "2026-01-02T00:00:00Z" }, remoteTime, true)).toBe(true);
+    expect(localTime).toBeGreaterThan(remoteTime);
+  });
+
+  it("lo local es más viejo → no", () => {
+    const remoteTime = Date.parse("2026-01-02T00:00:00Z");
+    expect(needsPush({ updatedAt: "2026-01-01T00:00:00Z" }, remoteTime, true)).toBe(false);
+  });
+
+  it("lo local sin reloj no se sube (se marca en el pull)", () => {
+    expect(needsPush({}, 0, true)).toBe(false);
+    expect(needsPush({ updatedAt: undefined }, 0, true)).toBe(false);
+  });
+
+  it("lo local sin reloj pero la nube lo desconoce → sí (es nuevo)", () => {
+    expect(needsPush({}, 0, false)).toBe(true);
+  });
+});
+
+// ─── pullAndSyncFromSupabase: integración ────────────────────────────────────
+describe("pullAndSyncFromSupabase", () => {
+  it("sin sesión → devuelve null y no hace nada", async () => {
+    mockSession.userId = null;
+    const result = await pullAndSyncFromSupabase();
+    expect(result).toBeNull();
+    expect(mockSetSyncStatus).not.toHaveBeenCalled();
+  });
+
+  it("sube tareas locales que la nube no conoce", async () => {
+    // Local: una tarea que la nube no tiene
+    mockDb._tables.tasks.set("local-1", {
+      id: "local-1", title: "Creada offline", updatedAt: "2026-01-01T00:00:00Z",
+    });
+
+    const result = await pullAndSyncFromSupabase();
+
+    expect(result).not.toBeNull();
+    expect(result!.pushedTasks).toBe(1);
+    // La tarea llegó a la nube
+    expect(mockData.tasks).toHaveLength(1);
+    expect(mockData.tasks[0].id).toBe("local-1");
+    // La nube la envía en snake_case
+    expect(mockData.tasks[0]).toHaveProperty("updated_at");
+    expect(mockData.tasks[0]).not.toHaveProperty("updatedAt");
+  });
+
+  it("baja tareas que solo existen en la nube", async () => {
+    // Nube: una tarea que el local no tiene
+    mockData.tasks.push({
+      id: "cloud-1", title: "Creada en la nube",
+      updated_at: "2026-01-01T00:00:00Z",
+    });
+
+    const result = await pullAndSyncFromSupabase();
+
+    expect(result).not.toBeNull();
+    expect(result!.pulledTasks).toBe(1);
+    // Local la tiene, en camelCase
+    const local = mockDb._tables.tasks.get("cloud-1");
+    expect(local).toBeDefined();
+    expect(local).toHaveProperty("updatedAt");
+    expect(local).not.toHaveProperty("updated_at");
+    expect(local).not.toHaveProperty("user_id");
+  });
+
+  it("aplica borrados remotos (tombstones) → deletedAt + contador", async () => {
+    // Local: tarea viva
+    mockDb._tables.tasks.set("t1", { id: "t1", title: "Viva", updatedAt: "2026-01-01T00:00:00Z" });
+    // Nube: tumba para esa tarea
+    mockData.tombstones.push({ id: "t1", kind: "tasks", updated_at: "2026-01-02T00:00:00Z" });
+
+    const result = await pullAndSyncFromSupabase();
+
+    expect(result).not.toBeNull();
+    expect(result!.remoteDeletes).toBe(1);
+    const local = mockDb._tables.tasks.get("t1");
+    expect(local!.deletedAt).toBe("2026-01-02T00:00:00Z");
+    // La tumba también se guarda localmente
+    expect(mockDb._tables.tombstones.size).toBe(1);
+  });
+
+  it("NO aplica una tumba más vieja que el borrado local", async () => {
+    // Local: ya borrada hace más tiempo
+    mockDb._tables.tasks.set("t1", { id: "t1", updatedAt: "2026-01-01T00:00:00Z", deletedAt: "2026-01-03T00:00:00Z" });
+    // Nube: tumba anterior
+    mockData.tombstones.push({ id: "t1", kind: "tasks", updated_at: "2026-01-02T00:00:00Z" });
+
+    const result = await pullAndSyncFromSupabase();
+
+    expect(result!.remoteDeletes).toBe(0);
+    // El borrado local se conserva (más reciente)
+    expect(mockDb._tables.tasks.get("t1")!.deletedAt).toBe("2026-01-03T00:00:00Z");
+  });
+
+  it("merge: gana lo más reciente (edición local posterior a la nube)", async () => {
+    // Local: editada a las 12:00
+    mockDb._tables.tasks.set("t1", { id: "t1", title: "Editada local", updatedAt: "2026-01-01T12:00:00Z" });
+    // Nube: copia a las 10:00
+    mockData.tasks.push({ id: "t1", title: "Copia nube", updated_at: "2026-01-01T10:00:00Z" });
+
+    const result = await pullAndSyncFromSupabase();
+
+    expect(result).not.toBeNull();
+    expect(result!.pulledTasks).toBe(0); // No se bajó: lo local es más reciente
+    expect(mockDb._tables.tasks.get("t1")!.title).toBe("Editada local");
+  });
+
+  it("merge: gana la nube si es más reciente", async () => {
+    mockDb._tables.tasks.set("t1", { id: "t1", title: "Local vieja", updatedAt: "2026-01-01T10:00:00Z" });
+    mockData.tasks.push({ id: "t1", title: "Nube nueva", updated_at: "2026-01-01T12:00:00Z" });
+
+    const result = await pullAndSyncFromSupabase();
+
+    expect(result!.pulledTasks).toBe(1);
+    expect(mockDb._tables.tasks.get("t1")!.title).toBe("Nube nueva");
+  });
+
+  it("actualiza el estado del store: syncing → synced", async () => {
+    await pullAndSyncFromSupabase();
+    expect(mockSetSyncStatus).toHaveBeenCalledWith("syncing");
+    expect(mockSetSyncStatus).toHaveBeenCalledWith("synced");
+  });
+
+  it("sin tareas ni proyectos → resumen en ceros", async () => {
+    const result = await pullAndSyncFromSupabase();
+    expect(result).toEqual({
+      pushedTasks: 0, pushedProjects: 0,
+      pulledTasks: 0, pulledProjects: 0,
+      remoteDeletes: 0,
+    });
+  });
+
+  it("proyectos se sincronizan igual que tareas", async () => {
+    // Local: proyecto nuevo
+    mockDb._tables.projects.set("p1", { id: "p1", name: "Local", updatedAt: "2026-01-01T00:00:00Z" });
+    // Nube: otro proyecto
+    mockData.projects.push({ id: "p2", name: "Nube", updated_at: "2026-01-01T00:00:00Z" });
+
+    const result = await pullAndSyncFromSupabase();
+
+    expect(result!.pushedProjects).toBe(1);
+    expect(result!.pulledProjects).toBe(1);
+    expect(mockData.projects).toHaveLength(2);
+    expect(mockDb._tables.projects.size).toBe(2);
+  });
+});

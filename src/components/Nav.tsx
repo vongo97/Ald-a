@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "@/store/useStore";
+import SyncIndicator from "@/components/SyncIndicator";
 import type { ViewId } from "@/domain/types";
 
 const ITEMS: { id: ViewId; label: string }[] = [
@@ -57,6 +58,7 @@ export default function Nav() {
           {it.label}
         </button>
       ))}
+      <SyncIndicator />
     </nav>
   );
 }

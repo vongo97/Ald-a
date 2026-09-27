@@ -10,6 +10,9 @@ export interface Toast {
   undo?: () => void;
 }
 
+/** Estado visual de la sincronización con la nube. */
+export type SyncStatus = "idle" | "syncing" | "synced" | "error" | "offline";
+
 interface StoreState {
   view: ViewId;
   searchQuery: string;
@@ -21,6 +24,12 @@ interface StoreState {
   session: Session | null;
   /** Preferencia de tema: light | dark | system. */
   theme: ThemePref;
+  /** Estado de la última sincronización con Supabase. */
+  syncStatus: SyncStatus;
+  /** Timestamp (ms) de la última sync exitosa. */
+  lastSyncAt: number | null;
+  /** Mensaje de error de la última sync fallida. */
+  syncError: string | null;
 
   setView: (v: ViewId) => void;
   setSearchQuery: (q: string) => void;
@@ -33,6 +42,8 @@ interface StoreState {
   selectProject: (id?: string) => void;
   setTheme: (t: ThemePref) => void;
   loadSession: () => Promise<void>;
+  /** Actualiza el estado de sync (llamado desde sync.ts). */
+  setSyncStatus: (status: SyncStatus, error?: string | null) => void;
 }
 
 let toastSeq = 0;
@@ -47,6 +58,9 @@ export const useStore = create<StoreState>((set) => ({
   selectedProjectId: undefined,
   session: null,
   theme: readThemePref(),
+  syncStatus: "idle",
+  lastSyncAt: null,
+  syncError: null,
 
   setView: (view) => set({ view, showDeviation: false }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
@@ -63,6 +77,12 @@ export const useStore = create<StoreState>((set) => ({
     persistTheme(theme);
     set({ theme });
   },
+  setSyncStatus: (syncStatus, error = null) =>
+    set((s) => ({
+      syncStatus,
+      syncError: syncStatus === "error" ? error : null,
+      lastSyncAt: syncStatus === "synced" ? Date.now() : s.lastSyncAt,
+    })),
   loadSession: async () => {
     try {
       const { supabase } = await import("./supabase");

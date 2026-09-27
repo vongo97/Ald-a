@@ -30,6 +30,7 @@ function AppInner() {
   const openCapture = useStore((s) => s.openCapture);
   const loadSession = useStore((s) => s.loadSession);
   const session = useStore((s) => s.session);
+  const pushToast = useStore((s) => s.pushToast);
   const theme = useStore((s) => s.theme);
   const [showNotifBanner, setShowNotifBanner] = useState(false);
   const pulledFor = useRef<string | null>(null);
@@ -57,7 +58,18 @@ function AppInner() {
     const userId = session?.user?.id;
     if (!userId || pulledFor.current === userId) return;
     pulledFor.current = userId;
-    void import("@/store/sync").then((m) => m.pullAndSyncFromSupabase());
+    void import("@/store/sync").then(async (m) => {
+      const summary = await m.pullAndSyncFromSupabase();
+      // Avisos de conflictos: borrados que llegaron desde otro dispositivo.
+      if (summary && summary.remoteDeletes > 0) {
+        const n = summary.remoteDeletes;
+        pushToast(
+          n === 1
+            ? "1 tarea eliminada desde otro dispositivo"
+            : `${n} tareas eliminadas desde otro dispositivo`,
+        );
+      }
+    });
   }, [session]);
 
   // Tareas pendientes de hoy para el badge

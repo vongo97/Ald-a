@@ -1,6 +1,7 @@
 import { db, stampNow } from "./db";
 import { supabase } from "./supabase";
 import { mergeDecision, timestamp, type SyncRecord } from "./merge";
+import { useStore } from "./useStore";
 import type { Task, Project } from "@/domain/types";
 
 /** Fase A: Exportar datos a JSON */
@@ -67,8 +68,10 @@ async function sessionUserId(): Promise<string | null> {
  * tiene `updated_at`/`deleted_at` (snake_case, añadidos por las migraciones
  * 0001 y 0005). Sin este mapeo, cualquier `select`/`upsert` con `updatedAt`
  * devuelve 400 y la sync entera se aborta.
+ *
+ * Exportada para tests.
  */
-function stripRemote<T>(row: Record<string, unknown>): T {
+export function stripRemote<T>(row: Record<string, unknown>): T {
   const { user_id: _userId, updated_at, deleted_at, ...rest } = row;
   return {
     ...rest,
@@ -77,8 +80,8 @@ function stripRemote<T>(row: Record<string, unknown>): T {
   } as T;
 }
 
-/** Convierte el modelo local (camelCase) a las columnas reales de Supabase. */
-function toRemote(row: Record<string, unknown>): Record<string, unknown> {
+/** Convierte el modelo local (camelCase) a las columnas reales de Supabase. Exportada para tests. */
+export function toRemote(row: Record<string, unknown>): Record<string, unknown> {
   const { updatedAt, deletedAt, ...rest } = row;
   return {
     ...rest,
@@ -114,8 +117,10 @@ export async function autoPushProjects(projects: Project[]): Promise<void> {
  *  - la nube no tiene reloj pero lo local sí → sí (lo local es lo que manda);
  *  - solo subimos si lo local es más reciente. Lo local sin reloj no se sube
  *    aquí: `pullAndSyncFromSupabase` le pone marcaje y se subirá la sync
- *    siguiente, así evitamos repetir el mismo upsert para siempre. */
-function needsPush(local: SyncRecord, remoteTime: number, remoteKnown: boolean): boolean {
+ *    siguiente, así evitamos repetir el mismo upsert para siempre.
+ *
+ * Exportada para tests. */
+export function needsPush(local: SyncRecord, remoteTime: number, remoteKnown: boolean): boolean {
   if (!remoteKnown) return true;
   const localTime = timestamp(local.updatedAt);
   if (localTime === 0) return false;
@@ -162,6 +167,15 @@ async function pushLocalChanges(): Promise<{ tasks: number; projects: number }> 
   return { tasks: tasksToPush.length, projects: projectsToPush.length };
 }
 
+/** Resumen de una pasada de sync, para el indicador de estado y avisos. */
+export interface SyncSummary {
+  pushedTasks: number;
+  pushedProjects: number;
+  pulledTasks: number;
+  pulledProjects: number;
+  remoteDeletes: number;
+}
+
 /**
  * Descarga la nube y la fusiona con lo local. Nunca hace `clear()`:
  *
@@ -171,69 +185,96 @@ async function pushLocalChanges(): Promise<{ tasks: number; projects: number }> 
  *    y si a falta un reloj manda lo local).
  *
  * Si la nube falla en cualquier punto, lo local queda intacto.
+ * Devuelve un `SyncSummary` con lo que hizo; `null` si no hay sesión.
  */
-export async function pullAndSyncFromSupabase(): Promise<void> {
+export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
   const userId = await sessionUserId();
-  if (!userId) return; // Sin cuenta no hay nube: todo sigue siendo local.
+  if (!userId) return null; // Sin cuenta no hay nube: todo sigue siendo local.
 
-  // 1) Subir primero. Este paso es el que evita perder datos offline.
-  await pushLocalChanges();
+  useStore.getState().setSyncStatus("syncing");
+  try {
+    // 1) Subir primero. Este paso es el que evita perder datos offline.
+    const pushed = await pushLocalChanges();
 
-  // 2) Bajar tareas y proyectos.
-  const [{ data: pData, error: pErr }, { data: tData, error: tErr }] = await Promise.all([
-    supabase.from("projects").select("*"),
-    supabase.from("tasks").select("*"),
-  ]);
-  if (pErr || tErr) {
-    console.error("Pull abortado (la nube falló, lo local se conserva):", pErr ?? tErr);
-    return;
+    // 2) Bajar tareas y proyectos.
+    const [{ data: pData, error: pErr }, { data: tData, error: tErr }] = await Promise.all([
+      supabase.from("projects").select("*"),
+      supabase.from("tasks").select("*"),
+    ]);
+    if (pErr || tErr) {
+      console.error("Pull abortado (la nube falló, lo local se conserva):", pErr ?? tErr);
+      useStore.getState().setSyncStatus("error", (pErr ?? tErr)?.message ?? "Error desconocido");
+      return null;
+    }
+
+    // 3) Bajar tumbas para aplicar borrados remotos.
+    const [{ data: tombData, error: tombErr }] = await Promise.all([
+      supabase.from("tombstones").select("id, kind, updated_at"),
+    ]);
+    if (tombErr) console.error("Pull de tumbas falló:", tombErr);
+
+    let remoteDeletes = 0;
+    let pulledTasks = 0;
+    let pulledProjects = 0;
+
+    // 4) Fusionar dentro de una transacción.
+    await db.transaction("rw", db.tasks, db.projects, db.tombstones, async () => {
+      // Aplicar tumbas remotas: elimina localmente si la tumba es más reciente.
+      for (const raw of (tombData ?? []) as { id: string; kind: string; updated_at: string }[]) {
+        const remoteTime = timestamp(raw.updated_at);
+        if (raw.kind === "tasks") {
+          const local = await db.tasks.get(raw.id);
+          if (local && (!local.deletedAt || timestamp(local.deletedAt) < remoteTime)) {
+            await db.tasks.update(raw.id, { deletedAt: raw.updated_at });
+            remoteDeletes++;
+          }
+        } else if (raw.kind === "projects") {
+          const local = await db.projects.get(raw.id);
+          if (local && (!local.deletedAt || timestamp(local.deletedAt) < remoteTime)) {
+            await db.projects.update(raw.id, { deletedAt: raw.updated_at });
+            remoteDeletes++;
+          }
+        }
+        // Guardamos la tumba local para que el próximo push la re-envíe si hace falta.
+        await db.tombstones.put({ id: raw.id, kind: raw.kind as "tasks" | "projects", updatedAt: raw.updated_at });
+      }
+
+      for (const raw of pData ?? []) {
+        const remote = stripRemote<Project>(raw as Record<string, unknown>);
+        const local = await db.projects.get(remote.id);
+        if (mergeDecision(local, remote) === "take-remote") {
+          await db.projects.put(remote);
+          pulledProjects++;
+        } else if (local && !local.updatedAt) {
+          await db.projects.update(local.id, { updatedAt: stampNow() });
+        }
+      }
+      for (const raw of tData ?? []) {
+        const remote = stripRemote<Task>(raw as Record<string, unknown>);
+        const local = await db.tasks.get(remote.id);
+        if (mergeDecision(local, remote) === "take-remote") {
+          await db.tasks.put(remote);
+          pulledTasks++;
+        } else if (local && !local.updatedAt) {
+          await db.tasks.update(local.id, { updatedAt: stampNow() });
+        }
+      }
+    });
+
+    useStore.getState().setSyncStatus("synced");
+    return {
+      pushedTasks: pushed.tasks,
+      pushedProjects: pushed.projects,
+      pulledTasks,
+      pulledProjects,
+      remoteDeletes,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("Sync falló (lo local se conserva):", err);
+    useStore.getState().setSyncStatus("error", msg);
+    return null;
   }
-
-  // 3) Bajar tumbas para aplicar borrados remotos.
-  const [{ data: tombData, error: tombErr }] = await Promise.all([
-    supabase.from("tombstones").select("id, kind, updated_at"),
-  ]);
-  if (tombErr) console.error("Pull de tumbas falló:", tombErr);
-
-  // 4) Fusionar dentro de una transacción.
-  await db.transaction("rw", db.tasks, db.projects, db.tombstones, async () => {
-    // Aplicar tumbas remotas: elimina localmente si la tumba es más reciente.
-    for (const raw of (tombData ?? []) as { id: string; kind: string; updated_at: string }[]) {
-      const remoteTime = timestamp(raw.updated_at);
-      if (raw.kind === "tasks") {
-        const local = await db.tasks.get(raw.id);
-        if (local && (!local.deletedAt || timestamp(local.deletedAt) < remoteTime)) {
-          await db.tasks.update(raw.id, { deletedAt: raw.updated_at });
-        }
-      } else if (raw.kind === "projects") {
-        const local = await db.projects.get(raw.id);
-        if (local && (!local.deletedAt || timestamp(local.deletedAt) < remoteTime)) {
-          await db.projects.update(raw.id, { deletedAt: raw.updated_at });
-        }
-      }
-      // Guardamos la tumba local para que el próximo push la re-envíe si hace falta.
-      await db.tombstones.put({ id: raw.id, kind: raw.kind as "tasks" | "projects", updatedAt: raw.updated_at });
-    }
-
-    for (const raw of pData ?? []) {
-      const remote = stripRemote<Project>(raw as Record<string, unknown>);
-      const local = await db.projects.get(remote.id);
-      if (mergeDecision(local, remote) === "take-remote") {
-        await db.projects.put(remote);
-      } else if (local && !local.updatedAt) {
-        await db.projects.update(local.id, { updatedAt: stampNow() });
-      }
-    }
-    for (const raw of tData ?? []) {
-      const remote = stripRemote<Task>(raw as Record<string, unknown>);
-      const local = await db.tasks.get(remote.id);
-      if (mergeDecision(local, remote) === "take-remote") {
-        await db.tasks.put(remote);
-      } else if (local && !local.updatedAt) {
-        await db.tasks.update(local.id, { updatedAt: stampNow() });
-      }
-    }
-  });
 }
 
 /** Sube (Upsert) una tarea a Supabase silenciosamente en segundo plano. */
