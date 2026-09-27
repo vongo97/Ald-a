@@ -3,7 +3,7 @@ import type { Task, ViewId } from "@/domain/types";
 import type { Session } from "@supabase/supabase-js";
 import { db } from "./db";
 import { supabase } from "./supabase";
-import { applyTheme, persistTheme, readThemePref, type ThemePref } from "./theme";
+import { applyTheme, persistTheme, readThemePref } from "./theme";
 
 export interface Toast {
   id: string;
@@ -23,8 +23,8 @@ interface StoreState {
   showDeviation: boolean;
   selectedProjectId?: string;
   session: Session | null;
-  /** Preferencia de tema: light | dark | system. */
-  theme: ThemePref;
+  /** Tema visual activo (ID: "warm-tech", "editorial-calido", ...). */
+  theme: string;
   /** Estado de la última sincronización con Supabase. */
   syncStatus: SyncStatus;
   /** Timestamp (ms) de la última sync exitosa. */
@@ -41,7 +41,7 @@ interface StoreState {
   dismissToast: (id: string) => void;
   setShowDeviation: (v: boolean) => void;
   selectProject: (id?: string) => void;
-  setTheme: (t: ThemePref) => void;
+  setTheme: (t: string) => void;
   loadSession: () => Promise<void>;
   /** Actualiza el estado de sync (llamado desde sync.ts). */
   setSyncStatus: (status: SyncStatus, error?: string | null) => void;

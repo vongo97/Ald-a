@@ -43,14 +43,9 @@ function AppInner() {
   }, [loadSession]);
 
   // El tema ya lo aplicó el script inline de index.html antes del paint;
-  // aquí solo nos mantenemos al día (cambio en Ajustes o cambio del SO).
+  // aquí solo nos mantenemos al día (cambio en Ajustes).
   useEffect(() => {
     applyTheme(theme);
-    if (theme !== "system") return;
-    const mq = window.matchMedia("(prefers-color-scheme: light)");
-    const onChange = () => applyTheme("system");
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
   }, [theme]);
 
   // Al conocer la sesión (login por contraseña, OAuth con Google o recarga),

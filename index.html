@@ -13,26 +13,24 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet" />
     <script>
-      /* Aplica el tema ANTES del primer paint para evitar el parpadeo
-         oscuro→claro. Debe ser inline y síncrono: si va en main.tsx el
-         usuario ya habría visto un frame con el tema equivocado. */
+      /* Aplica el tema ANTES del primer paint para evitar el parpadeo.
+         Debe ser inline y síncrono: si va en main.tsx el usuario ya
+         habría visto un frame con el tema equivocado. */
       (function () {
         try {
-          var p = null;
-          try { p = localStorage.getItem("ald-a:theme"); } catch (e) {}
-          // Mismos casos que readThemePref() en src/store/theme.ts. Si aquí
-          // y en el store no se interpretan igual, React repinta el tema al
-          // montar y se ve un parpadeo en el primer frame.
-          var dark =
-            p === "light" ? false :
-            p === "system" ? !window.matchMedia("(prefers-color-scheme: light)").matches :
-            true;
+          var KEY = "ald-a:style-theme";
+          var DEFAULT = "warm-tech";
+          var id = null;
+          try { id = localStorage.getItem(KEY); } catch (e) {}
+          if (!id) id = DEFAULT;
+          document.documentElement.setAttribute("data-theme", id);
+          /* Los modos de cada tema (para clase .dark/.light) */
+          var dark = { "warm-tech":1, "cronodisco":1, "gabinete":1 };
+          var isDark = !!dark[id];
           var el = document.documentElement;
-          el.classList.toggle("light", !dark);
-          el.classList.toggle("dark", dark);
-          el.style.colorScheme = dark ? "dark" : "light";
-          var m = document.querySelector('meta[name="theme-color"]');
-          if (m) m.setAttribute("content", dark ? "#1a1614" : "#faf9f5");
+          el.classList.toggle("light", !isDark);
+          el.classList.toggle("dark", isDark);
+          el.style.colorScheme = isDark ? "dark" : "light";
         } catch (e) {}
       })();
     </script>

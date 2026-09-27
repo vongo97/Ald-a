@@ -11,6 +11,7 @@ import {
 } from "@/notifications/notifier";
 import { exportDataToJSON, importDataFromJSON } from "@/store/sync";
 import { supabase } from "@/store/supabase";
+import { THEMES } from "@/store/themes";
 
 export default function SettingsView() {
   const { settings, saveSettings } = useSettings();
@@ -315,32 +316,42 @@ export default function SettingsView() {
       {/* ── Sección Apariencia ── */}
       <div className="mt-6 rounded-xl border border-slate-700/50 light:border-slate-200 bg-slate-800/40 light:bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-slate-200 light:text-slate-800">🎨 Apariencia</h2>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium text-slate-300 light:text-slate-700">Tema</p>
-            <p className="text-xs text-slate-500">
-              «Sistema» sigue el tema de tu dispositivo y cambia solo.
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-1" role="group" aria-label="Tema">
-            {(
-              [
-                ["light", "☀️ Claro"],
-                ["dark", "🌙 Oscuro"],
-                ["system", "💻 Sistema"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={theme === value}
-                className={`btn text-xs ${theme === value ? "btn-primary" : "btn-ghost"}`}
-                onClick={() => setTheme(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+        <p className="mb-3 text-xs text-slate-500">
+          Elige la identidad visual de la app. Cada tema cambia colores, tipografía y efectos.
+        </p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Tema visual">
+          {THEMES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="radio"
+              aria-checked={theme === t.id}
+              onClick={() => setTheme(t.id)}
+              className={`flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-all duration-150 ${
+                theme === t.id
+                  ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-md"
+                  : "border-slate-700/50 light:border-slate-200 hover:border-slate-500 light:hover:border-slate-400"
+              }`}
+            >
+              {/* Preview de colores */}
+              <span className="flex w-full items-center gap-1.5">
+                <span
+                  className="h-5 w-5 rounded-md border border-black/20"
+                  style={{ backgroundColor: t.swatch }}
+                  aria-hidden
+                />
+                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 light:text-slate-500">
+                  {t.mode === "dark" ? "🌙" : "☀️"} {t.mode}
+                </span>
+              </span>
+              <span className="text-sm font-semibold text-slate-200 light:text-slate-800">
+                {t.label}
+              </span>
+              <span className="text-[11px] leading-tight text-slate-500 light:text-slate-400">
+                {t.blurb}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 

@@ -1,63 +1,290 @@
 @import "tailwindcss";
 
-/* ─── Apple × Anthropic ───────────────────────────────────────────────────
-   Mezcla de estilos:
-   - ANTHROPIC: fondo crema cálido, serif editorial (Fraunces) en títulos,
-     acentos terracota, tonos tierra.
-   - APPLE: limpieza, redondeados grandes, blur sutil (frosted glass),
-     animaciones suaves, sombras delicadas.
+/* ================================================================
+   ALD-A · Sistema de temas (integración kimik3 × Apple × Anthropic)
+   ================================================================
+   7 estilos intercambiables via [data-theme] en <html>.
+   Cada tema define --surface, --text, --accent, etc. (kimik3) y este
+   fichero los mapea a las variables que usan los componentes
+   (--card-bg, --fg, --accent-hover, ...).
 
-   Aspecto por defecto = OSCURO (cálido, no azulado).
-   La variante `light:` aplica solo debajo de `.light` en el <html>. */
+   El modo (light/dark) lo determina el tema: no hay toggle separado.
+   La clase .dark/.light en <html> sigue existiendo para que las
+   variantes `light:`/`dark:` de Tailwind sigan funcionando.
+   ================================================================ */
+
 @custom-variant light (&:where(.light, .light *));
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --color-ink: #1a1614;
+  --color-ink: #1a1512;
   --color-ink-soft: #292524;
 }
 
-/* ─── Tokens de color ────────────────────────────────────────────────────── */
+/* ---------- Fallback base (= warm-tech, el tema por defecto) ---------- */
 :root {
   color-scheme: dark;
-  /* Fondo: negro cálido (stone), no azulado (slate) */
-  --bg: #1a1614;
-  --fg: #e7e5e4;
-  /* Superficies */
-  --card-bg: rgba(255, 255, 255, 0.04);
-  --card-border: rgba(255, 255, 255, 0.08);
-  --card-hover: rgba(255, 255, 255, 0.07);
-  /* Acento principal: terracota cálida (Anthropic) */
-  --accent: #e07a5f;
-  --accent-hover: #d4694c;
-  --accent-soft: rgba(224, 122, 95, 0.15);
-  /* Acento secundario: ámbar para avisos */
-  --warning: #f59e0b;
-  /* Glass (frosted glass de Apple) */
-  --glass-bg: rgba(26, 22, 20, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.06);
-  --scrollbar: #44403c;
+  --bg: #1a1512;
+  --surface: rgba(255, 248, 238, 0.05);
+  --text: #f2e8dc;
+  --text-2: #9c8b74;
+  --border: rgba(242, 232, 220, 0.12);
+  --accent: #d9a441;
+  --accent-2: #c1502e;
+  --radius: 12px;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
 }
 
-html.light {
-  color-scheme: light;
-  /* Fondo: crema cálido (Anthropic), no blanco azulado */
-  --bg: #faf9f5;
-  --fg: #292524;
-  /* Superficies */
-  --card-bg: #ffffff;
-  --card-border: #e7e5e4;
-  --card-hover: #f5f5f4;
-  /* Acento: terracota más profunda para contraste en crema */
-  --accent: #c15f3c;
-  --accent-hover: #a85030;
-  --accent-soft: rgba(193, 95, 60, 0.1);
-  --warning: #d97706;
-  /* Glass sobre crema */
-  --glass-bg: rgba(250, 249, 245, 0.78);
-  --glass-border: rgba(0, 0, 0, 0.06);
-  --scrollbar: #d6d3d1;
+/* ================================================================
+   MAPEO: variables kimik3 → variables de componentes
+   Se aplica a cualquier [data-theme]; el valor viene del tema activo.
+   ================================================================ */
+[data-theme] {
+  --fg: var(--text);
+  --fg-muted: var(--text-2);
+  --card-bg: var(--surface);
+  --card-border: var(--border);
+  --accent-secondary: var(--accent-2);
+
+  /* Derivados con color-mix(): un solo set de reglas para los 7 temas */
+  --accent-hover: color-mix(in srgb, var(--accent) 82%, black);
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --card-hover: color-mix(in srgb, var(--surface) 88%, var(--text));
+  --glass-bg: color-mix(in srgb, var(--bg) 78%, transparent);
+  --glass-border: color-mix(in srgb, var(--border) 60%, transparent);
+  --scrollbar: var(--border);
 }
+
+/* ---------- Los 7 temas (colores de kimik3, sin tocar) ---------- */
+
+/* A · EDITORIAL CÁLIDO */
+[data-theme="editorial-calido"] {
+  --bg: #f7f1e6;
+  --surface: #fffdf7;
+  --text: #33301f;
+  --text-2: #8a8266;
+  --border: #d8cdb4;
+  --accent: #c1502e;
+  --accent-2: #4a5228;
+  --radius: 4px;
+  --shadow: 3px 3px 0 rgba(214, 140, 60, 0.28);
+  --font-body: Georgia, "Times New Roman", serif;
+  --font-display: Georgia, serif;
+}
+
+/* B · WARM TECH ORGÁNICO */
+[data-theme="warm-tech"] {
+  --bg: #1a1512;
+  --surface: rgba(255, 248, 238, 0.05);
+  --text: #f2e8dc;
+  --text-2: #9c8b74;
+  --border: rgba(242, 232, 220, 0.12);
+  --accent: #d9a441;
+  --accent-2: #c1502e;
+  --radius: 12px;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --font-body: ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+}
+
+/* C · DIGITAL CRAFT */
+[data-theme="digital-craft"] {
+  --bg: #f4efe4;
+  --surface: #fbf7ec;
+  --text: #2e2a24;
+  --text-2: #8d8471;
+  --border: #d8cfb8;
+  --accent: #a23b2d;
+  --accent-2: #3a506b;
+  --radius: 14px 4px 12px 5px / 5px 12px 4px 14px;
+  --shadow: 2px 3px 0 rgba(58, 80, 107, 0.2);
+  --font-body: ui-sans-serif, system-ui, sans-serif;
+  --font-display: Georgia, serif;
+}
+
+/* 1 · CRONODISCO */
+[data-theme="cronodisco"] {
+  --bg: #141829;
+  --surface: #1e2438;
+  --text: #e8e4d8;
+  --text-2: #8a93b8;
+  --border: #3a4260;
+  --accent: #e07856;
+  --accent-2: #7ba6a3;
+  --radius: 999px;
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --font-body: ui-sans-serif, system-ui, sans-serif;
+  --font-display: Georgia, serif;
+}
+
+/* 2 · GABINETE */
+[data-theme="gabinete"] {
+  --bg: #22271f;
+  --surface: #efe6d2;
+  --text: #efe6d2;
+  --text-2: #b08d57;
+  --border: #4a5240;
+  --accent: #b08d57;
+  --accent-2: #8a6a3a;
+  --radius: 3px;
+  --shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  --font-body: ui-sans-serif, system-ui, sans-serif;
+  --font-display: Georgia, serif;
+}
+
+/* 3 · PARTITURA */
+[data-theme="partitura"] {
+  --bg: #f8f4ea;
+  --surface: #fffdf6;
+  --text: #2c2620;
+  --text-2: #6b6152;
+  --border: #b8ad97;
+  --accent: #a4442e;
+  --accent-2: #8c6d3f;
+  --radius: 6px;
+  --shadow: 0 1px 0 rgba(44, 38, 32, 0.12);
+  --font-body: ui-sans-serif, system-ui, sans-serif;
+  --font-display: Georgia, serif;
+}
+
+/* 4 · TINTA VIVA */
+[data-theme="tinta-viva"] {
+  --bg: #f5f2e9;
+  --surface: #efeadd;
+  --text: #26231c;
+  --text-2: #8a8272;
+  --border: #cfc7b0;
+  --accent: #b3392c;
+  --accent-2: #26231c;
+  --radius: 4px;
+  --shadow: none;
+  --font-body: ui-sans-serif, system-ui, sans-serif;
+  --font-display: Georgia, serif;
+}
+
+/* ================================================================
+   EFECTOS ESPECÍFICOS POR TEMA (kimik3 + adaptaciones)
+   ================================================================ */
+
+/* Editorial: grano de papel */
+[data-theme="editorial-calido"] body {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.55 0 0 0 0 0.5 0 0 0 0 0.4 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+[data-theme="editorial-calido"] h1 {
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Warm Tech: aurora terracota → dorada */
+[data-theme="warm-tech"] body::before,
+[data-theme="warm-tech"] body::after {
+  content: "";
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  z-index: 0;
+  pointer-events: none;
+}
+[data-theme="warm-tech"] body::before {
+  width: 45vw;
+  height: 45vw;
+  top: -15vw;
+  right: -10vw;
+  background: rgba(193, 80, 46, 0.35);
+  animation: aurora-a 12s ease-in-out infinite alternate;
+}
+[data-theme="warm-tech"] body::after {
+  width: 40vw;
+  height: 40vw;
+  bottom: -15vw;
+  left: -10vw;
+  background: rgba(217, 164, 65, 0.22);
+  animation: aurora-b 15s ease-in-out infinite alternate-reverse;
+}
+@keyframes aurora-a {
+  to {
+    transform: translate(4vw, 3vh) scale(1.15);
+  }
+}
+@keyframes aurora-b {
+  to {
+    transform: translate(-3vw, -4vh) scale(1.2);
+  }
+}
+
+/* Digital Craft: cards con rotación sutil (efecto físico) */
+[data-theme="digital-craft"] .card {
+  transform: rotate(-0.6deg);
+}
+[data-theme="digital-craft"] .card:nth-child(2n) {
+  transform: rotate(0.5deg);
+}
+
+/* Cronodisco: punto coral delante de cada card (estilo anillo) */
+[data-theme="cronodisco"] .card::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+/* Gabinete: alfiler dorado sobre cada card + rotación */
+[data-theme="gabinete"] .card {
+  position: relative;
+  background: var(--surface);
+  color: #3a352a;
+  transform: rotate(-0.6deg);
+}
+[data-theme="gabinete"] .card:nth-child(2n) {
+  transform: rotate(0.7deg);
+}
+[data-theme="gabinete"] .card::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #d8b878, #8a6a3a);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+[data-theme="gabinete"] h1 {
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Partitura: pentagrama sutil en listas de tareas */
+[data-theme="partitura"] .task-list {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 22px,
+    var(--border) 22px 23px
+  );
+  padding-left: 34px;
+}
+[data-theme="partitura"] h1 {
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Tinta Viva: sin sombra, borde inferior como pincelada */
+[data-theme="tinta-viva"] .card {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-image: linear-gradient(90deg, var(--text), transparent) 1;
+}
+
+/* ================================================================
+   BASE (común a todos los temas)
+   ================================================================ */
 
 html,
 body,
@@ -69,20 +296,18 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  /* Sans-serif del sistema (Apple) para el cuerpo */
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  /* Transición suave al cambiar de tema */
-  transition: background-color 0.3s ease, color 0.3s ease;
+  font-family: var(--font-body);
+  transition: background-color 0.4s ease, color 0.4s ease;
 }
 
-/* Serif editorial (Fraunces) para títulos — toque Anthropic */
+/* Serif editorial para títulos */
 .font-display {
-  font-family: "Fraunces", Georgia, "Times New Roman", serif;
+  font-family: var(--font-display), Georgia, serif;
   font-optical-sizing: auto;
   letter-spacing: -0.01em;
 }
 
-/* Efecto frosted glass (Apple) para la navegación */
+/* Frosted glass (Apple) para nav y header */
 .glass {
   background: var(--glass-bg);
   backdrop-filter: blur(20px) saturate(1.4);
@@ -92,21 +317,25 @@ body {
 
 @layer components {
   .card {
-    @apply rounded-2xl border px-3 py-2 transition-colors;
+    @apply border transition-all duration-200;
     background: var(--card-bg);
     border-color: var(--card-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
   }
   .card:hover {
     background: var(--card-hover);
   }
   .btn {
-    @apply inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition-all duration-150 cursor-pointer;
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-150 cursor-pointer;
+    border-radius: var(--radius);
   }
   .btn:active {
     transform: scale(0.97);
   }
   .btn-primary {
-    @apply inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition-all duration-150 cursor-pointer;
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-150 cursor-pointer;
+    border-radius: var(--radius);
     background: var(--accent);
     color: #fff;
   }
@@ -117,7 +346,8 @@ body {
     transform: scale(0.97);
   }
   .btn-ghost {
-    @apply inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition-all duration-150 cursor-pointer border;
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-150 cursor-pointer border;
+    border-radius: var(--radius);
     border-color: var(--card-border);
     color: var(--fg);
     background: transparent;
@@ -129,22 +359,24 @@ body {
     transform: scale(0.97);
   }
   .btn-danger {
-    @apply inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition-all duration-150 cursor-pointer border;
-    border-color: rgba(244, 63, 94, 0.4);
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-150 cursor-pointer border;
+    border-radius: var(--radius);
+    border-color: color-mix(in srgb, #f43f5e 40%, transparent);
     color: #fb7185;
     background: transparent;
   }
   .btn-danger:hover {
-    background: rgba(244, 63, 94, 0.1);
+    background: color-mix(in srgb, #f43f5e 10%, transparent);
   }
   .input {
-    @apply w-full rounded-xl border px-3 py-2 text-sm transition-colors focus:outline-none;
+    @apply w-full border px-3 py-2 text-sm transition-colors focus:outline-none;
+    border-radius: var(--radius);
     border-color: var(--card-border);
     background: var(--card-bg);
     color: var(--fg);
   }
   .input::placeholder {
-    color: #78716c; /* stone-500 */
+    color: var(--fg-muted);
   }
   .input:focus {
     border-color: var(--accent);
@@ -161,9 +393,6 @@ body {
   scrollbar-color: var(--scrollbar) transparent;
 }
 
-/* La navegación se desliza horizontalmente en móvil: la barra de scroll en
-   una nav estorba más de lo que informa, se recorre con el dedo. Sobrescribe
-   la regla global anterior (clase > *). */
 .no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -172,58 +401,28 @@ body {
   display: none;
 }
 
-/* ─── Dock estilo macOS ──────────────────────────────────────────────────── */
+/* ================================================================
+   DOCK ESTILO macOS
+   ================================================================ */
 .dock-item {
   will-change: transform;
-}
-
-/* El ítem bajo el cursor crece (magnificación) */
-.dock-item:hover {
-  transform: translateY(-6px) scale(1.25);
-}
-
-/* Los vecinos inmediatos crecen un poco menos: efecto dock de macOS.
-   `:has()` está soportado en todos los navegadores modernos. */
-.dock-item:hover + .dock-item,
-.dock-item:has(+ .dock-item:hover) {
-  transform: translateY(-3px) scale(1.1);
-}
-
-/* Transición suave al salir del hover */
-.dock-item {
   transition:
     transform 0.25s cubic-bezier(0.2, 0.8, 0.4, 1),
     opacity 0.2s ease,
     color 0.2s ease;
 }
-
-/* Respetar menos movimiento */
-@media (prefers-reduced-motion: reduce) {
-  .dock-item:hover,
-  .dock-item:hover + .dock-item,
-  .dock-item:has(+ .dock-item:hover) {
-    transform: none;
-  }
+.dock-item:hover {
+  transform: translateY(-6px) scale(1.25);
+}
+.dock-item:hover + .dock-item,
+.dock-item:has(+ .dock-item:hover) {
+  transform: translateY(-3px) scale(1.1);
 }
 
-/* ─── Animaciones (Apple-style: sutiles y rápidas) ───────────────────────── */
+/* ================================================================
+   ANIMACIONES
+   ================================================================ */
 
-/* Entrada de vista: fade + slide-up sutil */
-@keyframes view-enter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.view-enter {
-  animation: view-enter 0.25s ease-out;
-}
-
-/* El check de completar: pop + destello */
 @keyframes check-pop {
   0% {
     transform: scale(1);
@@ -239,36 +438,10 @@ body {
   animation: check-pop 0.3s ease-out;
 }
 
-/* Entrada de tarjeta nueva */
-@keyframes card-enter {
-  from {
-    opacity: 0;
-    transform: translateY(4px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-.card-enter {
-  animation: card-enter 0.2s ease-out;
-}
-
-/* Prefiere menos movimiento: respetamos la accesibilidad */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-/* ─── Checkbox con partículas (completar tarea) ─────────────────────────── */
+/* Checkbox con partículas */
 .check-burst {
   position: relative;
 }
-
 .check-burst::after {
   content: "";
   position: absolute;
@@ -278,8 +451,6 @@ body {
   animation: burst-ring 0.5s ease-out forwards;
   pointer-events: none;
 }
-
-/* Partículas: 6 puntos que salen disparados desde el centro */
 .check-burst::before {
   content: "";
   position: absolute;
@@ -296,7 +467,6 @@ body {
   animation: burst-particles 0.5s ease-out forwards;
   pointer-events: none;
 }
-
 @keyframes burst-ring {
   0% {
     transform: scale(0.5);
@@ -307,7 +477,6 @@ body {
     opacity: 0;
   }
 }
-
 @keyframes burst-particles {
   0% {
     box-shadow:
@@ -333,5 +502,20 @@ body {
       13px 3px 0 -1px rgba(52, 211, 153, 0),
       -13px 3px 0 -1px rgba(52, 211, 153, 0);
     opacity: 0;
+  }
+}
+
+/* Accesibilidad: menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  .dock-item:hover,
+  .dock-item:hover + .dock-item,
+  .dock-item:has(+ .dock-item:hover) {
+    transform: none;
   }
 }
