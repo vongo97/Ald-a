@@ -28,7 +28,12 @@ export default defineConfig({
           if (id.includes("node_modules/@supabase")) return "vendor-supabase";
           if (id.includes("node_modules/dexie")) return "vendor-dexie";
           if (id.includes("node_modules/@dnd-kit")) return "vendor-dnd";
-          if (id.includes("node_modules/react") || id.includes("node_modules/scheduler"))
+          if (
+            id.includes("node_modules/react") ||
+            id.includes("node_modules/scheduler") ||
+            id.includes("node_modules/framer-motion") ||
+            id.includes("node_modules/motion")
+          )
             return "vendor-react";
           return undefined;
         },

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useStore } from "@/store/useStore";
 import { db } from "@/store/db";
@@ -35,7 +35,16 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
   const score = showScore ? priorityScore(task) : null;
   const overdue = task.dueDate && task.status === "todo" && task.dueDate < toISODate(startOfDay(new Date()));
 
+  // Dispara la animación de partículas solo al completar (no en re-renders)
+  const burstTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [burst, setBurst] = useState(false);
+
   const toggle = () => {
+    if (!done) {
+      setBurst(true);
+      if (burstTimer.current) clearTimeout(burstTimer.current);
+      burstTimer.current = setTimeout(() => setBurst(false), 600);
+    }
     void toggleWithUndo(task, toggleTask, pushToast);
   };
 
@@ -46,6 +55,8 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
           type="button"
           onClick={toggle}
           className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-200 ${
+            burst ? "check-burst " : ""
+          }${
             done
               ? "check-pop border-emerald-400 light:border-emerald-300 bg-emerald-400 text-slate-950 light:text-white"
               : "border-[var(--card-border)] hover:border-[var(--accent)] hover:scale-110"
