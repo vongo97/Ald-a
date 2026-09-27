@@ -77,19 +77,30 @@ export interface CaptureImprovement {
 export async function improveCapture(ctx: LlmContext, input: string): Promise<LlmResult<CaptureImprovement>> {
   const now = new Date();
   const res = await chat(ctx, {
-    system: withToday(SYSTEM_JSON, now),
-    maxTokens: 400,
+    system: withToday(
+      `${SYSTEM_JSON}\nDevuelve SOLO el objeto JSON crudo, sin explicaciones, sin markdown, sin código.`,
+      now,
+    ),
+    maxTokens: 800,
     user: `Interpreta esta captura de tarea escrita en español y normalízala.
 Captura: "${input}"
-Devuelve: {"title":"título limpio","dueDate":"YYYY-MM-DD"|"","dueTime":"HH:mm"|"","priority":1-4,"labels":["..."],"notes":""}
+Responde exactamente con este objeto JSON (y ningún otro texto):
+{"title":"título limpio","dueDate":"YYYY-MM-DD" o "" para hoy/mañana si se infiere, "dueTime":"HH:mm" o "", "priority":1,"labels":[""],"notes":""}
 Usa "" para lo que no se pueda inferir. priority 1=urgente e importante, 4=trivial.`,
   });
   if (!res.ok || !res.data) return { ok: false, error: res.error, usedLlm: res.usedLlm };
   const parsed = extractJson<CaptureImprovement>(res.data);
-  if (!parsed || typeof parsed.title !== "string") {
+  // Tolerancia a claves alternativas ("título"/"titulo")
+  const raw = (parsed ?? {}) as unknown as Record<string, unknown>;
+  const title =
+    (typeof raw.title === "string" && raw.title) ||
+    (typeof raw["título"] === "string" && raw["título"]) ||
+    (typeof raw.titulo === "string" && raw.titulo) ||
+    null;
+  if (!title) {
     return { ok: false, error: "Respuesta del modelo no interpretable", usedLlm: true };
   }
-  return { ok: true, data: parsed, usedLlm: true };
+  return { ok: true, data: { ...parsed, title }, usedLlm: true };
 }
 
 /** Estado rápido para la UI. */

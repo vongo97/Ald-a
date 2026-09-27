@@ -224,25 +224,24 @@ export default function DayPlanModal({ open, onClose }: DayPlanModalProps) {
           }`}
           style={isChild ? { borderLeftColor: "var(--accent)" } : undefined}
         >
-          {task.start && task.end && (
-            <>
-              <input
-                type="time"
-                value={task.start}
-                onChange={(e) => updateAt(path, { start: e.target.value })}
-                className="input w-24 px-1.5 py-1 text-xs"
-                aria-label="Hora inicio"
-              />
-              <span className="text-xs text-muted">—</span>
-              <input
-                type="time"
-                value={task.end}
-                onChange={(e) => updateAt(path, { end: e.target.value })}
-                className="input w-24 px-1.5 py-1 text-xs"
-                aria-label="Hora fin"
-              />
-            </>
-          )}
+          {/* Horario editable en TODAS las filas (padre e hijas).
+              Si la IA no devolvió horas, aparecen vacías para que el
+              usuario las rellene; sin ambas horas no se crea timeBlock. */}
+          <input
+            type="time"
+            value={task.start ?? ""}
+            onChange={(e) => updateAt(path, { start: e.target.value })}
+            className="input w-24 px-1.5 py-1 text-xs"
+            aria-label="Hora inicio"
+          />
+          <span className="text-xs text-muted">—</span>
+          <input
+            type="time"
+            value={task.end ?? ""}
+            onChange={(e) => updateAt(path, { end: e.target.value })}
+            className="input w-24 px-1.5 py-1 text-xs"
+            aria-label="Hora fin"
+          />
           <input
             type="text"
             value={task.title}

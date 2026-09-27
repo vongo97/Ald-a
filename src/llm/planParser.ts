@@ -37,7 +37,7 @@ REGLAS:
 4. NO solapes actividades. Deja huecos mínimos de 10-15 min entre ellas.
 5. Si el texto ya tiene horarios específicos ("a las 10"), respétalos.
 6. Detecta etiquetas @nombre y asígnalas a la tarea correspondiente.
-7. Si una actividad es compleja y tiene sub-actividades naturales, usa "children" para anidarlas (ej: "Trabajar" → ["Revisar emails", "Escribir informe"]). Cada child también tiene start/end.
+7. Si una actividad es compleja y tiene sub-actividades naturales, usa "children" para anidarlas (ej: "Trabajar" → ["Revisar emails", "Escribir informe"]). OBLIGATORIO: cada child DEBE tener start y end propios (reparte el bloque horario del padre entre sus children, sin solapes).
 8. Si todas las actividades no caben en el día, añade un campo "warning" explicándolo en español.
 9. El campo "reason" (razón) SIEMPRE en español, máximo 8 palabras.
 10. Responde SOLO con JSON válido, sin markdown adicional.
