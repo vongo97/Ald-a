@@ -13,6 +13,7 @@ interface Props {
 export default function ProfileQuestionnaire({ onComplete, canCancel, onCancel }: Props) {
   const pushToast = useStore((s) => s.pushToast);
   const [step, setStep] = useState(0);
+  const [newActivity, setNewActivity] = useState("");
   const [answers, setAnswers] = useState<ProfileAnswers>({
     wakeTime: "07:00",
     sleepTime: "22:30",
@@ -38,6 +39,15 @@ export default function ProfileQuestionnaire({ onComplete, canCancel, onCancel }
         ? prev.activities.filter((a) => a !== activity)
         : [...prev.activities, activity],
     }));
+  };
+
+  const addCustomActivity = () => {
+    const name = newActivity.trim();
+    if (!name) return;
+    if (!answers.activities.includes(name)) {
+      setAnswers((prev) => ({ ...prev, activities: [...prev.activities, name] }));
+    }
+    setNewActivity("");
   };
 
   const next = () => {
@@ -147,40 +157,89 @@ export default function ProfileQuestionnaire({ onComplete, canCancel, onCancel }
           )}
 
           {q.type === "multi" && (
-            <div className="grid grid-cols-2 gap-2">
-              {q.options.map((activity) => (
+            <div>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {q.options.map((activity) => (
+                  <button
+                    key={activity}
+                    type="button"
+                    onClick={() => toggleActivity(activity)}
+                    className={`rounded-xl border px-3 py-2.5 text-sm transition-all ${
+                      answers.activities.includes(activity)
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)] text-primary"
+                        : "border-theme bg-surface text-primary hover:opacity-80"
+                    }`}
+                  >
+                    {answers.activities.includes(activity) ? "✓ " : ""}
+                    {activity}
+                  </button>
+                ))}
+                {/* Actividades personalizadas ya añadidas */}
+                {answers.activities
+                  .filter((a) => !q.options.includes(a as never))
+                  .map((activity) => (
+                    <button
+                      key={activity}
+                      type="button"
+                      onClick={() => toggleActivity(activity)}
+                      className="rounded-xl border border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-2.5 text-sm text-primary transition-all"
+                    >
+                      ✓ {activity}
+                    </button>
+                  ))}
+              </div>
+              {/* Campo para añadir actividad propia */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newActivity}
+                  onChange={(e) => setNewActivity(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addCustomActivity();
+                    }
+                  }}
+                  placeholder="Añadir otra actividad..."
+                  className="input flex-1 text-sm"
+                  aria-label="Añadir actividad personalizada"
+                />
                 <button
-                  key={activity}
                   type="button"
-                  onClick={() => toggleActivity(activity)}
-                  className={`rounded-xl border px-3 py-2.5 text-sm transition-all ${
-                    answers.activities.includes(activity)
-                      ? "border-[var(--accent)] bg-[var(--accent-soft)] text-primary"
-                      : "border-theme bg-surface text-primary hover:opacity-80"
-                  }`}
+                  onClick={addCustomActivity}
+                  disabled={!newActivity.trim()}
+                  className="btn-ghost text-sm"
                 >
-                  {answers.activities.includes(activity) ? "✓ " : ""}
-                  {activity}
+                  + Añadir
                 </button>
-              ))}
+              </div>
             </div>
           )}
 
           {q.type === "number" && (
-            <div className="flex items-center gap-3">
-              <input
-                type="range"
-                min={0}
-                max={30}
-                step={5}
-                value={answers.breakMin}
-                onChange={(e) => setAnswer("breakMin", Number(e.target.value))}
-                className="flex-1"
-                aria-label="Minutos de descanso"
-              />
-              <span className="text-lg font-semibold text-primary w-16 text-center">
-                {answers.breakMin} min
-              </span>
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <input
+                  type="range"
+                  min={0}
+                  max={60}
+                  step={5}
+                  value={answers.breakMin}
+                  onChange={(e) => setAnswer("breakMin", Number(e.target.value))}
+                  className="flex-1"
+                  aria-label="Minutos de descanso"
+                />
+                <span className="text-lg font-semibold text-primary w-20 text-center">
+                  {answers.breakMin} min
+                </span>
+              </div>
+              <div className="flex justify-between text-xs text-muted px-1">
+                <span>0</span>
+                <span>15</span>
+                <span>30</span>
+                <span>45</span>
+                <span>60</span>
+              </div>
             </div>
           )}
         </div>
