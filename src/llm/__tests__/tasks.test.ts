@@ -1,8 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
-import { improveCapture } from "../tasks";
+import { breakdownTask, improveCapture } from "../tasks";
 import type { Settings } from "@/domain/types";
+import type { UserProfile } from "@/domain/profile";
 
 const settings: Settings = { provider: "openai", apiKey: "sk-test", model: "gpt-test", baseUrl: "" };
+
+/** Rutina de ejemplo: se levanta a las 6 (el usuario pidió que las propuestas salgan de aquí). */
+const profile: UserProfile = {
+  id: "p1",
+  wakeTime: "06:00",
+  sleepTime: "22:00",
+  chronotype: "matutino",
+  workStart: "09:00",
+  workEnd: "18:00",
+  activities: ["Ejercicio"],
+  breakMin: 15,
+  updatedAt: "2026-09-22T00:00:00.000Z",
+};
 
 /** Fake de red: el LLM responde con `content` (formato OpenAI). */
 function llm(content: string) {
@@ -74,5 +88,68 @@ describe("improveCapture", () => {
     const bad = await improveCapture({ settings, fetchFn: fetchFn2 }, "...");
     expect(bad.ok).toBe(false);
     expect(bad.error).toBe("Respuesta del modelo no interpretable");
+  });
+
+  it("con perfil pide horarios según la rutina (se levanta a las 6 → a las 6)", async () => {
+    const fetchFn = llm(
+      JSON.stringify({
+        title: "Día",
+        subtasks: [{ title: "Gimnasio", start: "06:00", end: "07:00" }],
+      }),
+    );
+    const res = await improveCapture({ settings, fetchFn }, LONG, profile);
+
+    const [, init] = fetchFn.mock.calls[0] as [string, RequestInit];
+    const body = String(init.body);
+    expect(body).toContain("Se despierta a las 06:00"); // contexto del perfil
+    expect(body).toContain("rutina del usuario"); // regla de propuesta
+    expect(res.data?.subtasks?.[0]).toMatchObject({ start: "06:00", end: "07:00" });
+  });
+
+  it("sin perfil: las horas solo si el texto las indica (regla antigua)", async () => {
+    const fetchFn = llm(JSON.stringify({ title: "X", subtasks: [] }));
+    await improveCapture({ settings, fetchFn }, LONG);
+
+    const [, init] = fetchFn.mock.calls[0] as [string, RequestInit];
+    const body = String(init.body);
+    expect(body).toContain("déjalas fuera");
+    expect(body).not.toContain("Se despierta");
+  });
+});
+
+describe("breakdownTask", () => {
+  it("con perfil devuelve inicio/fin validados y duración saneada", async () => {
+    const fetchFn = llm(
+      JSON.stringify({
+        subtasks: [
+          { title: "Desayunar", durationMin: 30, start: "06:00", end: "06:30" },
+          { title: "Correr", durationMin: "45", start: "a las 7", end: "08:00" },
+          { title: "" }, // sin título → fuera
+        ],
+      }),
+    );
+
+    const res = await breakdownTask({ settings, fetchFn }, { title: "Mi rutina" }, profile);
+
+    expect(res.ok).toBe(true);
+    expect(res.data).toHaveLength(2);
+    expect(res.data?.[0]).toMatchObject({ title: "Desayunar", durationMin: 30, start: "06:00", end: "06:30" });
+    expect(res.data?.[1]?.durationMin).toBe(45); // "45" string → 45
+    expect(res.data?.[1]?.start).toBeUndefined(); // no HH:mm → fuera
+    expect(res.data?.[1]?.end).toBe("08:00");
+
+    const [, init] = fetchFn.mock.calls[0] as [string, RequestInit];
+    const body = String(init.body);
+    expect(body).toContain("Se despierta a las 06:00");
+    expect(body).toContain("HH:mm"); // pide start/end en el ejemplo JSON
+  });
+
+  it("sin perfil no pide horas", async () => {
+    const fetchFn = llm(JSON.stringify({ subtasks: [{ title: "Paso 1", durationMin: 10 }] }));
+    const res = await breakdownTask({ settings, fetchFn }, { title: "Vaga" });
+    expect(res.data?.[0]?.start).toBeUndefined();
+
+    const [, init] = fetchFn.mock.calls[0] as [string, RequestInit];
+    expect(String(init.body)).not.toContain("HH:mm");
   });
 });

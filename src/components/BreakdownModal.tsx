@@ -7,7 +7,7 @@ interface BreakdownModalProps {
   initialSubtasks: SubtaskSuggestion[];
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (subtasks: { title: string; durationMin?: number }[]) => Promise<void>;
+  onConfirm: (subtasks: { title: string; durationMin?: number; start?: string; end?: string }[]) => Promise<void>;
 }
 
 export default function BreakdownModal({
@@ -17,13 +17,15 @@ export default function BreakdownModal({
   onClose,
   onConfirm,
 }: BreakdownModalProps) {
-  const [items, setItems] = useState<{ id: string; title: string; durationMin?: number; checked: boolean }[]>(() =>
-    initialSubtasks.map((s, idx) => ({
-      id: `item-${idx}-${Date.now()}`,
-      title: s.title,
-      durationMin: s.durationMin,
-      checked: true,
-    })),
+  const [items, setItems] = useState<{ id: string; title: string; durationMin?: number; start?: string; checked: boolean }[]>(
+    () =>
+      initialSubtasks.map((s, idx) => ({
+        id: `item-${idx}-${Date.now()}`,
+        title: s.title,
+        durationMin: s.durationMin,
+        start: s.start,
+        checked: true,
+      })),
   );
   const [saving, setSaving] = useState(false);
   // Este modal no tenía Escape en absoluto (solo click fuera del velo).
@@ -43,6 +45,10 @@ export default function BreakdownModal({
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, durationMin } : item)));
   };
 
+  const updateStart = (id: string, start?: string) => {
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, start } : item)));
+  };
+
   const removeItem = (id: string) => {
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
@@ -59,7 +65,9 @@ export default function BreakdownModal({
     if (selected.length === 0) return;
     setSaving(true);
     try {
-      await onConfirm(selected.map((s) => ({ title: s.title.trim(), durationMin: s.durationMin })));
+      await onConfirm(
+        selected.map((s) => ({ title: s.title.trim(), durationMin: s.durationMin, start: s.start })),
+      );
       onClose();
     } finally {
       setSaving(false);
@@ -120,6 +128,15 @@ export default function BreakdownModal({
                 placeholder="min"
                 aria-label="Duración en minutos"
                 title="Duración en minutos"
+              />
+              {/* Inicio propuesto por la perfil/rutina — editable, vacío = sin horario */}
+              <input
+                type="time"
+                value={item.start ?? ""}
+                onChange={(e) => updateStart(item.id, e.target.value || undefined)}
+                className="input w-24 shrink-0 py-1 text-xs"
+                aria-label="Hora de inicio (opcional)"
+                title="Hora de inicio — la hora final se calcula con la duración"
               />
               <button
                 type="button"

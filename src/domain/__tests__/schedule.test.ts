@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { resolveSchedule, timeToMin } from "../schedule";
+import { deriveEnd, resolveSchedule, timeToMin } from "../schedule";
+
+describe("deriveEnd", () => {
+  it("inicio + duración → hora final", () => {
+    expect(deriveEnd("06:00", 90)).toBe("07:30");
+    expect(deriveEnd("17:45", 30)).toBe("18:15");
+  });
+
+  it("nunca pasa de 23:59", () => {
+    expect(deriveEnd("23:30", 60)).toBe("23:59");
+  });
+
+  it("entradas inválidas → undefined (no se bloquea el horario)", () => {
+    expect(deriveEnd("bad", 30)).toBeUndefined();
+    expect(deriveEnd("06:00", 0)).toBeUndefined();
+    expect(deriveEnd("06:00", -10)).toBeUndefined();
+  });
+});
 
 describe("timeToMin", () => {
   it("convierte HH:mm a minutos", () => {

@@ -4,7 +4,9 @@ import { db } from "@/store/db";
 import { useStore } from "@/store/useStore";
 import { useSettings } from "@/store/SettingsContext";
 import { createTaskFromCapture, addSubtasks } from "@/store/actions";
-import { parseCapture, type ParsedCapture } from "@/parsers/capture";
+import { loadProfile } from "@/store/profile";
+import { parseCapture, stripDayCommands, isDayCommandWord, type ParsedCapture } from "@/parsers/capture";
+import { WEEKDAY_SHORT } from "@/parsers/dateparser";
 import { improveCapture, type CaptureSubtask } from "@/llm/tasks";
 import type { Priority } from "@/domain/types";
 import { formatLocalDate, parseISODate } from "@/domain/dateutils";
@@ -63,7 +65,9 @@ export default function CaptureModal() {
       setImproving(true);
       let structured: { parsed: ParsedCapture; subtasks: CaptureSubtask[] } | null = null;
       try {
-        const res = await improveCapture({ settings }, text);
+        // "@lunes" no se le pasa a la IA: quien manda en recurrencia y fecha
+        // es el parser local (y así no lo devuelve como etiqueta).
+        const res = await improveCapture({ settings }, stripDayCommands(text), loadProfile());
         if (res.ok && res.data?.title.trim() && res.data.title.trim().length <= 160) {
           const imp = res.data;
           const prio: Priority | undefined =
@@ -79,7 +83,11 @@ export default function CaptureModal() {
               dueDate: parsedNow.dueDate || imp.dueDate || undefined,
               dueTime: parsedNow.dueTime || imp.dueTime || undefined,
               priority: parsedNow.priority ?? prio,
-              labels: [...new Set([...parsedNow.labels, ...(imp.labels ?? [])])],
+              // La IA puede devolver "lunes" como etiqueta: ya es un comando
+              // de día, no una etiqueta.
+              labels: [...new Set([...parsedNow.labels, ...(imp.labels ?? [])])].filter(
+                (l) => !isDayCommandWord(l),
+              ),
             },
             subtasks: imp.subtasks ?? [],
           };
@@ -130,7 +138,7 @@ export default function CaptureModal() {
     if (!text.trim() || !settings.apiKey.trim()) return;
     setImproving(true);
     try {
-      const res = await improveCapture({ settings }, text);
+      const res = await improveCapture({ settings }, stripDayCommands(text), loadProfile());
       if (res.ok && res.data) {
         const imp = res.data;
         let reconstructed = imp.title;
@@ -177,7 +185,7 @@ export default function CaptureModal() {
             ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Escribe una tarea… p. ej. Entregar informe mañana a las 3pm #trabajo @correo ~1h !1"
+            placeholder="Escribe una tarea… p. ej. Llamar al proveedor mañana #trabajo @urgente ~1h · @lunes = cada lunes"
             className="input text-base"
             aria-label="Captura en lenguaje natural"
           />
@@ -190,7 +198,10 @@ export default function CaptureModal() {
             )}
             {parsed.recurrence && (
               <span className={`${chip} bg-violet-500/20 light:bg-violet-100 text-violet-300 light:text-violet-600`}>
-                🔁 recurre
+                🔁{" "}
+                {parsed.recurrence.kind === "weekly" && parsed.recurrence.weekdays?.length
+                  ? `cada ${parsed.recurrence.weekdays.map((d) => WEEKDAY_SHORT[d]).join(", ")}`
+                  : "recurre"}
               </span>
             )}
             {parsed.projectName && (

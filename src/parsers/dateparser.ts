@@ -13,6 +13,9 @@ export const WEEKDAYS: Record<string, number> = {
   sábado: 6,
 };
 
+/** Nombre corto por día (0 = dom … 6 = sáb) — para chips y avisos. */
+export const WEEKDAY_SHORT = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+
 export const MONTHS: Record<string, number> = {
   enero: 0, ene: 0,
   febrero: 1, feb: 1,
@@ -221,7 +224,8 @@ function pmAdjust(h: number, suffix?: string): number {
   return h;
 }
 
-function normalizeWeekday(w: string): string {
+/** "miércoles"→"miercoles", "domingos"→"domingo", "sábados"→"sabado". */
+export function normalizeWeekday(w: string): string {
   const t = w.toLowerCase().replace("miércoles", "miercoles").replace("sábado", "sabado");
   if (t === "domingos") return "domingo";
   if (t === "sabados") return "sabado";

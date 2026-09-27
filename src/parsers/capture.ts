@@ -1,5 +1,6 @@
 import type { Priority, RecurrenceSpec } from "@/domain/types";
-import { parseDate } from "./dateparser";
+import { addDays, toISODate } from "@/domain/dateutils";
+import { parseDate, WEEKDAYS, normalizeWeekday } from "./dateparser";
 
 export interface ParsedCapture {
   title: string;
@@ -22,6 +23,29 @@ export interface CaptureContext {
   now?: Date;
 }
 
+/** "@lunes", "@miércoles"… — también plurales ("@sábados"). */
+const DAY_TOKEN_RE = /(?:^|\s)@(domingos?|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bados?)/gi;
+/** "@hoy" y "@mañana" como fecha. */
+const DATE_TOKEN_RE = /(?:^|\s)@(hoy|ma(?:ñ|n)ana)\b/gi;
+
+/**
+ * Quita los comandos "@día" del texto (para pasárselo a la IA ya limpio:
+ * el parser local es quien manda en recurrencia y fecha).
+ */
+export function stripDayCommands(input: string): string {
+  return input.replace(DAY_TOKEN_RE, " ").replace(DATE_TOKEN_RE, " ").replace(/\s{2,}/g, " ").trim();
+}
+
+/**
+ * ¿Es esta palabra un comando de día disfrazado de etiqueta? (La IA no debería
+ * devolver "@lunes" como etiqueta; si lo hace, se descarta en la mezcla.)
+ */
+export function isDayCommandWord(word: string): boolean {
+  const w = word.trim().toLowerCase();
+  if (w === "hoy" || /^ma(?:ñ|n)ana$/.test(w)) return true;
+  return normalizeWeekday(w) in WEEKDAYS;
+}
+
 /**
  * Convierte "Terminar informe mañana a las 3pm #trabajo @urgente !1" en una tarea.
  * El título es lo que queda tras retirar los fragmentos reconocidos.
@@ -29,6 +53,24 @@ export interface CaptureContext {
 export function parseCapture(input: string, ctx: CaptureContext = {}): ParsedCapture {
   let text = input.trim();
   const matched: string[] = [];
+  const now = ctx.now ?? new Date();
+
+  // --- Comandos @día (ANTES que las etiquetas: no son etiquetas) ----------
+  // "@lunes" = rutina de todos los lunes (recurrencia semanal), no una
+  // etiqueta ni un proyecto. "@hoy" / "@mañana" = fecha.
+  const weekdays: number[] = [];
+  text = text.replace(DAY_TOKEN_RE, (_all, word: string) => {
+    const wd = WEEKDAYS[normalizeWeekday(word.toLowerCase())];
+    if (wd !== undefined && !weekdays.includes(wd)) weekdays.push(wd);
+    matched.push(`@${word}`);
+    return " ";
+  });
+  let cmdDate: string | undefined;
+  text = text.replace(DATE_TOKEN_RE, (_all, word: string) => {
+    cmdDate = toISODate(word.toLowerCase().startsWith("m") ? addDays(now, 1) : now);
+    matched.push(`@${word}`);
+    return " ";
+  });
 
   // --- Etiquetas @ --------------------------------------------------------
   const labels: string[] = [];
@@ -85,7 +127,7 @@ export function parseCapture(input: string, ctx: CaptureContext = {}): ParsedCap
   }
 
   // --- Fecha / hora / recurrencia ------------------------------------------
-  const dp = parseDate(text, ctx.now ?? new Date());
+  const dp = parseDate(text, now);
   if (dp.date) {
     // Retirar el texto de fecha consumido (case-insensitive)
     for (const frag of dp.matched) {
@@ -95,6 +137,31 @@ export function parseCapture(input: string, ctx: CaptureContext = {}): ParsedCap
     }
   }
 
+  // --- Recurrencia y fecha desde los comandos @día -------------------------
+  let recurrence = dp.recurrence;
+  if (weekdays.length > 0) {
+    const days = [...weekdays].sort((a, b) => a - b);
+    if (!recurrence) {
+      recurrence = { kind: "weekly", every: 1, weekdays: days };
+    } else if (recurrence.kind === "weekly") {
+      // "todos los lunes @miércoles" → semanal con los dos días.
+      recurrence = {
+        ...recurrence,
+        weekdays: [...new Set([...(recurrence.weekdays ?? []), ...days])].sort((a, b) => a - b),
+      };
+    }
+    // (diaria/mensual: lo que ponga el texto manda; los @días solo fechan)
+  }
+  // Próxima aparición de los días marcados — misma regla que "cada lunes"
+  // del dateparser: si toca hoy, se apunta al próximo (nunca a hoy).
+  let weekdayDate: string | undefined;
+  if (!dp.date && weekdays.length > 0) {
+    const today = now.getDay();
+    const delta = Math.min(...weekdays.map((w) => ((w - today + 7) % 7) || 7));
+    weekdayDate = toISODate(addDays(now, delta));
+  }
+  const dueDate = dp.date ?? cmdDate ?? weekdayDate;
+
   // --- Limpieza -------------------------------------------------------------
   const title = text
     .replace(/\b(?:a las?|el|para|durante)\s*$/i, "")
@@ -102,15 +169,17 @@ export function parseCapture(input: string, ctx: CaptureContext = {}): ParsedCap
     .replace(/^\s+|\s+$/g, "");
 
   return {
-    title: title || input.trim(),
-    dueDate: dp.date,
+    // Si se consumió todo, el título es lo que quede… sin los comandos @día
+    // (por si la captura es solo "@lunes").
+    title: title || stripDayCommands(input).trim() || input.trim(),
+    dueDate,
     dueTime: dp.time,
     priority,
     importance,
     projectId,
     projectName,
     labels,
-    recurrence: dp.recurrence,
+    recurrence,
     durationMin,
     matched,
   };

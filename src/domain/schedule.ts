@@ -67,3 +67,14 @@ export function resolveSchedule(draft: ScheduleDraft): ScheduleResolution {
   }
   return { ok: true, changes: { timeBlock: undefined, durationMin: Math.round(dur) } };
 }
+
+/**
+ * Hora de inicio + duración → hora final "HH:mm" (para cuando la IA solo
+ * propone el inicio). Con tope a las 23:59: un bloque no pasa de día.
+ */
+export function deriveEnd(start: string, durationMin: number): string | undefined {
+  const s = timeToMin(start);
+  if (Number.isNaN(s) || !Number.isFinite(durationMin) || durationMin <= 0) return undefined;
+  const e = Math.min(s + Math.round(durationMin), 24 * 60 - 1);
+  return `${String(Math.floor(e / 60)).padStart(2, "0")}:${String(e % 60).padStart(2, "0")}`;
+}

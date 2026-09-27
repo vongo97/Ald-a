@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { addSubtasks, updateTask } from "./actions";
+import { loadProfile } from "./profile";
 import { improveCapture } from "@/llm/tasks";
 import type { Settings } from "@/domain/types";
 
@@ -86,7 +87,8 @@ export async function autoBreakdownBlobs(
         continue;
       }
       try {
-        const res = await improveCapture({ settings }, task.title);
+        // Con el perfil, la IA propone además horarios según la rutina.
+        const res = await improveCapture({ settings }, task.title, loadProfile());
         const title = res.ok ? res.data?.title.trim() : undefined;
         if (!title || title.length > 160) {
           // Respuesta no usable (o el párrafo entero devuelto): no se toca

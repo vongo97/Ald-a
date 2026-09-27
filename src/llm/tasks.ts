@@ -1,10 +1,15 @@
 import type { Task } from "@/domain/types";
+import type { UserProfile } from "@/domain/profile";
+import { profileToPrompt } from "@/domain/profile";
 import { chat, extractJson, llmStatus, type LlmContext, type LlmResult } from "./client";
 
 export interface SubtaskSuggestion {
   title: string;
   notes?: string;
   durationMin?: number;
+  /** "HH:mm" — solo si el perfil permite proponer horarios. */
+  start?: string;
+  end?: string;
 }
 
 const SYSTEM_JSON = `Eres un asistente de productividad. Respondes SOLO con JSON válido, sin explicaciones ni markdown adicional.
@@ -15,24 +20,67 @@ function withToday(system: string, now: Date): string {
   return system.replace("{today}", now.toISOString().slice(0, 10));
 }
 
+/**
+ * Contexto de rutina para los prompts.
+ *
+ * Con perfil, la IA propone horarios siguiendo la rutina del usuario (se
+ * levanta a las X → la primera actividad es a las X). Sin perfil se mantiene
+ * la regla conservadora: horas solo si el texto las trae.
+ */
+function routineContext(profile: UserProfile | null | undefined): { timeRule: string; routine: string } {
+  if (!profile) {
+    return {
+      timeRule: "solo si el texto las indica (si no las indica, déjalas fuera)",
+      routine: "",
+    };
+  }
+  return {
+    timeRule:
+      'tomando las del texto si las indica; si una actividad no tiene hora, propón "start"/"end" siguiendo la rutina del usuario (más abajo)',
+    routine: `
+CONTEXTO DEL USUARIO:
+${profileToPrompt(profile)}
+Propón horarios así: la primera actividad del día empieza a su hora de despertar; lo laboral va dentro de su horario de trabajo; encadena las actividades con ${profile.breakMin} min de descanso entre ellas; nada entre su hora de dormir y su despertar. Duración por actividad: la del texto; si no aparece, 45 min (o la que deduzcas). Devuelve SIEMPRE "start" y "end" juntos ("HH:mm").`,
+  };
+}
+
 /** Desglosa una tarea vaga en pasos accionables. */
 export async function breakdownTask(
   ctx: LlmContext,
   task: Pick<Task, "title" | "notes" | "durationMin">,
+  profile?: UserProfile | null,
 ): Promise<LlmResult<SubtaskSuggestion[]>> {
+  const { routine } = routineContext(profile);
   const now = new Date();
   const res = await chat(ctx, {
     system: withToday(SYSTEM_JSON, now),
-    maxTokens: 800,
+    maxTokens: profile ? 1000 : 800,
     user: `Desglosa esta tarea en entre 3 y 6 subtareas concretas y accionables.
 Tarea: "${task.title}"
 ${task.notes ? `Notas: ${task.notes}` : ""}
-Devuelve: {"subtasks":[{"title":"...","durationMin":30}]}
-"duracionMin" en minutos (opcional). Los "title" van SIEMPRE en español. Si no es posible desglosarla, devuelve una lista vacía.`,
+Devuelve: {"subtasks":[{"title":"...","durationMin":30${profile ? ',"start":"HH:mm","end":"HH:mm"' : ""}]}
+"duracionMin" en minutos (opcional). Los "title" van SIEMPRE en español. Si no es posible desglosarla, devuelve una lista vacía.${routine}`,
   });
   if (!res.ok || !res.data) return { ok: false, error: res.error, usedLlm: res.usedLlm };
   const parsed = extractJson<{ subtasks?: SubtaskSuggestion[] }>(res.data);
-  const subtasks = Array.isArray(parsed?.subtasks) ? parsed!.subtasks!.filter((s) => s && typeof s.title === "string") : [];
+  const rawSubs = Array.isArray(parsed?.subtasks) ? (parsed!.subtasks as unknown[]) : [];
+  const subtasks: SubtaskSuggestion[] = [];
+  for (const s of rawSubs) {
+    const o = (s ?? {}) as Record<string, unknown>;
+    if (typeof o.title !== "string" || !o.title.trim()) continue;
+    const dur =
+      typeof o.durationMin === "number"
+        ? o.durationMin
+        : typeof o.durationMin === "string" && /^\d+$/.test(o.durationMin)
+          ? Number(o.durationMin)
+          : undefined;
+    subtasks.push({
+      title: o.title.trim(),
+      ...(dur && dur > 0 ? { durationMin: dur } : {}),
+      start: hhmm(o.start),
+      end: hhmm(o.end),
+    });
+  }
   return { ok: true, data: subtasks, usedLlm: true };
 }
 
@@ -93,8 +141,16 @@ function hhmm(v: unknown): string | undefined {
  *
  * Si la captura es un párrafo (p. ej. un día descrito completo), devuelve
  * además `subtasks` con cada actividad y sus horas: la captura se crea entonces
- * como tarea padre con título corto + subtareas, de una sola vez. */
-export async function improveCapture(ctx: LlmContext, input: string): Promise<LlmResult<CaptureImprovement>> {
+ * como tarea padre con título corto + subtareas, de una sola vez.
+ *
+ * Con `profile` (rutina del usuario), las horas que no estén en el texto se
+ * PROponen a partir de su rutina en vez de dejarse fuera. */
+export async function improveCapture(
+  ctx: LlmContext,
+  input: string,
+  profile?: UserProfile | null,
+): Promise<LlmResult<CaptureImprovement>> {
+  const { timeRule, routine } = routineContext(profile);
   const now = new Date();
   const res = await chat(ctx, {
     system: withToday(
@@ -110,7 +166,7 @@ Responde exactamente con este objeto JSON (y ningún otro texto):
 {"title":"título limpio","dueDate":"YYYY-MM-DD" o "" para hoy/mañana si se infiere, "dueTime":"HH:mm" o "", "priority":1,"labels":[""],"notes":"","subtasks":[{"title":"actividad","start":"HH:mm","end":"HH:mm"}]}
 Usa "" para lo que no se pueda inferir. priority 1=urgente e importante, 4=trivial.
 Si el texto describe UNA sola tarea, "subtasks" debe ser [].
-Si describe VARIAS actividades o un día completo, pon en "title" un resumen corto (máx. 10 palabras) de todo el día, y devuelve cada actividad en "subtasks" con sus horas "start"/"end" solo si el texto las indica (si no las indica, déjalas fuera). Los títulos van SIEMPRE en español.`,
+Si describe VARIAS actividades o un día completo, pon en "title" un resumen corto (máx. 10 palabras) de todo el día, y devuelve cada actividad en "subtasks" con sus horas "start"/"end" ${timeRule}. Los títulos van SIEMPRE en español.${routine}`,
   });
   if (!res.ok || !res.data) return { ok: false, error: res.error, usedLlm: res.usedLlm };
   const parsed = extractJson<CaptureImprovement>(res.data);

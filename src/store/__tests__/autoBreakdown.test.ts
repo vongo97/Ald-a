@@ -38,6 +38,11 @@ vi.mock("../actions", () => ({
 
 vi.mock("@/llm/tasks", () => ({ improveCapture: vi.fn() }));
 
+// El perfil fluye hasta el prompt (se lo pasa autoBreakdown).
+vi.mock("../profile", () => ({
+  loadProfile: vi.fn(() => ({ id: "p1", wakeTime: "06:00" })),
+}));
+
 const settings: Settings = {
   provider: "openai",
   apiKey: "sk-test",
@@ -92,6 +97,8 @@ describe("autoBreakdownBlobs", () => {
     const res = await autoBreakdownBlobs(settings);
 
     expect(res).toMatchObject({ fixed: 1, subtasks: 2, failed: 0 });
+    // El perfil de rutina viaja hasta la llamada de IA.
+    expect(improveCapture).toHaveBeenCalledWith({ settings }, BLOB, { id: "p1", wakeTime: "06:00" });
     expect(state.updated[0][0]).toBe("b1");
     expect(state.updated[0][1].title).toBe("Día cargado: gimnasio y teletrabajo");
     // El párrafo original nunca se pierde: queda en notes.
