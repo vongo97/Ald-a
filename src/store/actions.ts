@@ -4,6 +4,7 @@ import type { Project, Task } from "@/domain/types";
 import { nextOccurrence } from "@/domain/recurrence";
 import { toISODate, parseISODate } from "@/domain/dateutils";
 import { autoPushTask, autoPushProject, autoPushTasks, autoPushDeleteTask, autoPushDeleteProject, autoRestoreTasks, autoRestoreProjects } from "./sync";
+import { timeToMin } from "@/domain/schedule";
 import { randomColor } from "@/domain/color";
 import { restoreSet } from "@/domain/trash";
 
@@ -224,20 +225,31 @@ export async function addSubtask(parent: Task, title: string): Promise<Task> {
  */
 export async function addSubtasks(
   parent: Task,
-  items: { title: string; durationMin?: number }[],
+  items: { title: string; durationMin?: number; start?: string; end?: string; labels?: string[] }[],
 ): Promise<Task[]> {
   const base = await db.tasks.where("parentId").equals(parent.id).count();
   const created: Task[] = items.map((s, i) => ({
     id: newId(),
     title: s.title,
-    labels: [],
+    labels: s.labels ?? [],
     priority: parent.priority,
     importance: parent.importance,
     status: "todo",
     parentId: parent.id,
     order: base + i,
     createdAt: new Date().toISOString(),
-    ...(s.durationMin ? { durationMin: s.durationMin } : {}),
+    // Subtarea con horario (plan del día / captura estructurada): nace con
+    // timeBlock y la fecha del padre, así aparece en la vista Día — misma
+    // regla que sigue SubtaskTimePanel al bloquear horas.
+    ...(s.start && s.end
+      ? {
+          timeBlock: { start: s.start, end: s.end },
+          durationMin: s.durationMin ?? timeToMin(s.end) - timeToMin(s.start),
+          ...(parent.dueDate ? { dueDate: parent.dueDate } : {}),
+        }
+      : s.durationMin
+        ? { durationMin: s.durationMin }
+        : {}),
   }));
   await db.tasks.bulkPut(created);
   void autoPushTasks(created);

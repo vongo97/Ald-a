@@ -3,12 +3,20 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/store/db";
 import { useStore } from "@/store/useStore";
 import { useSettings } from "@/store/SettingsContext";
-import { createTaskFromCapture } from "@/store/actions";
-import { parseCapture } from "@/parsers/capture";
-import { improveCapture } from "@/llm/tasks";
+import { createTaskFromCapture, addSubtasks } from "@/store/actions";
+import { parseCapture, type ParsedCapture } from "@/parsers/capture";
+import { improveCapture, type CaptureSubtask } from "@/llm/tasks";
 import type { Priority } from "@/domain/types";
 import { formatLocalDate, parseISODate } from "@/domain/dateutils";
 import { useDialogA11y } from "@/hooks/useDialogA11y";
+
+/**
+ * Por encima de este tamaño la captura no es «una tarea» sino un texto largo
+ * (un día descrito, un párrafo): al enviarla la IA propone título corto +
+ * subtareas con horario y se crean de una sola vez. Por debajo, todo sigue
+ * siendo local e instantáneo (sin coste de IA).
+ */
+const STRUCTURE_MIN_CHARS = 120;
 
 export default function CaptureModal() {
   const open = useStore((s) => s.captureOpen);
@@ -42,8 +50,54 @@ export default function CaptureModal() {
 
   const submit = async () => {
     if (!text.trim()) return closeCapture();
-    await createTaskFromCapture(parseCapture(text, { projects: projects ?? [] }));
-    pushToast(`Tarea creada: ${parsed.title}`);
+    const parsedNow = parseCapture(text, { projects: projects ?? [] });
+
+    // Texto largo + IA disponible → estructurar de una vez: la IA propone un
+    // título corto (¡no el párrafo entero!) y las subtareas que contiene el
+    // texto, con sus horas si las trae. Si la IA falla, se crea tal cual.
+    if (settings.apiKey.trim() && text.trim().length >= STRUCTURE_MIN_CHARS) {
+      setImproving(true);
+      let structured: { parsed: ParsedCapture; subtasks: CaptureSubtask[] } | null = null;
+      try {
+        const res = await improveCapture({ settings }, text);
+        if (res.ok && res.data?.title.trim()) {
+          const imp = res.data;
+          const prio: Priority | undefined =
+            typeof imp.priority === "number" && imp.priority >= 1 && imp.priority <= 4
+              ? (imp.priority as Priority)
+              : undefined;
+          structured = {
+            parsed: {
+              ...parsedNow,
+              // El título lo propone la IA; el parser local manda en lo que
+              // ya detecta bien (#proyecto, recurrencia, fechas relativas).
+              title: imp.title.trim(),
+              dueDate: parsedNow.dueDate || imp.dueDate || undefined,
+              dueTime: parsedNow.dueTime || imp.dueTime || undefined,
+              priority: parsedNow.priority ?? prio,
+              labels: [...new Set([...parsedNow.labels, ...(imp.labels ?? [])])],
+            },
+            subtasks: imp.subtasks ?? [],
+          };
+        }
+      } catch {
+        // sin red o error del LLM: captura normal (más abajo)
+      }
+      setImproving(false);
+
+      if (structured) {
+        const parent = await createTaskFromCapture(structured.parsed);
+        const n = structured.subtasks.length;
+        if (n > 0) await addSubtasks(parent, structured.subtasks);
+        pushToast(n > 0 ? `✨ «${parent.title}» + ${n} subtareas` : `Tarea creada: ${parent.title}`);
+        setText("");
+        closeCapture();
+        return;
+      }
+    }
+
+    await createTaskFromCapture(parsedNow);
+    pushToast(`Tarea creada: ${parsedNow.title}`);
     setText("");
     closeCapture();
   };

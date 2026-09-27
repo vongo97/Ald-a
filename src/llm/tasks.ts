@@ -66,6 +66,13 @@ Devuelve: {"items":[{"taskId":"...","title":"...","start":"HH:mm","end":"HH:mm"}
   return { ok: true, data: items, usedLlm: true };
 }
 
+export interface CaptureSubtask {
+  title: string;
+  /** "HH:mm" solo si el texto del usuario lo indica. */
+  start?: string;
+  end?: string;
+}
+
 export interface CaptureImprovement {
   title: string;
   dueDate?: string;
@@ -73,9 +80,20 @@ export interface CaptureImprovement {
   priority?: number;
   labels?: string[];
   notes?: string;
+  /** Varias actividades en el texto (día descrito): se crean como subtareas. */
+  subtasks?: CaptureSubtask[];
 }
 
-/** Segunda opinión del LLM para una captura ambigua. */
+/** "HH:mm" válido o undefined (lo demás se descarta). */
+function hhmm(v: unknown): string | undefined {
+  return typeof v === "string" && /^\d{1,2}:\d{2}$/.test(v.trim()) ? v.trim() : undefined;
+}
+
+/** Segunda opinión del LLM para una captura ambigua.
+ *
+ * Si la captura es un párrafo (p. ej. un día descrito completo), devuelve
+ * además `subtasks` con cada actividad y sus horas: la captura se crea entonces
+ * como tarea padre con título corto + subtareas, de una sola vez. */
 export async function improveCapture(ctx: LlmContext, input: string): Promise<LlmResult<CaptureImprovement>> {
   const now = new Date();
   const res = await chat(ctx, {
@@ -87,8 +105,10 @@ export async function improveCapture(ctx: LlmContext, input: string): Promise<Ll
     user: `Interpreta esta captura de tarea escrita en español y normalízala.
 Captura: "${input}"
 Responde exactamente con este objeto JSON (y ningún otro texto):
-{"title":"título limpio","dueDate":"YYYY-MM-DD" o "" para hoy/mañana si se infiere, "dueTime":"HH:mm" o "", "priority":1,"labels":[""],"notes":""}
-Usa "" para lo que no se pueda inferir. priority 1=urgente e importante, 4=trivial.`,
+{"title":"título limpio","dueDate":"YYYY-MM-DD" o "" para hoy/mañana si se infiere, "dueTime":"HH:mm" o "", "priority":1,"labels":[""],"notes":"","subtasks":[{"title":"actividad","start":"HH:mm","end":"HH:mm"}]}
+Usa "" para lo que no se pueda inferir. priority 1=urgente e importante, 4=trivial.
+Si el texto describe UNA sola tarea, "subtasks" debe ser [].
+Si describe VARIAS actividades o un día completo, pon en "title" un resumen corto (máx. 10 palabras) de todo el día, y devuelve cada actividad en "subtasks" con sus horas "start"/"end" solo si el texto las indica (si no las indica, déjalas fuera). Los títulos van SIEMPRE en español.`,
   });
   if (!res.ok || !res.data) return { ok: false, error: res.error, usedLlm: res.usedLlm };
   const parsed = extractJson<CaptureImprovement>(res.data);
@@ -102,7 +122,15 @@ Usa "" para lo que no se pueda inferir. priority 1=urgente e importante, 4=trivi
   if (!title) {
     return { ok: false, error: "Respuesta del modelo no interpretable", usedLlm: true };
   }
-  return { ok: true, data: { ...parsed, title }, usedLlm: true };
+  // Subtareas: solo títulos no vacíos; horas validadas a HH:mm.
+  const rawSubs = Array.isArray(raw.subtasks) ? (raw.subtasks as unknown[]) : [];
+  const subtasks: CaptureSubtask[] = [];
+  for (const s of rawSubs) {
+    const o = (s ?? {}) as Record<string, unknown>;
+    if (typeof o.title !== "string" || !o.title.trim()) continue;
+    subtasks.push({ title: o.title.trim(), start: hhmm(o.start), end: hhmm(o.end) });
+  }
+  return { ok: true, data: { ...parsed, title, subtasks: subtasks.length ? subtasks : undefined }, usedLlm: true };
 }
 
 /** Estado rápido para la UI. */
