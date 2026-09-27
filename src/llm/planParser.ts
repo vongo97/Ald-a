@@ -90,6 +90,7 @@ export async function parseDayPlan(
   input: string,
   referenceDate: string,
   existingTasks: Pick<Task, "title" | "timeBlock">[] = [],
+  profileContext?: string,
 ): Promise<LlmResult<DayPlanResult>> {
   const now = new Date();
   const system = SYSTEM.replace("{today}", referenceDate);
@@ -102,10 +103,12 @@ export async function parseDayPlan(
           .join("\n")}`
       : "";
 
+  const profileSection = profileContext ? `\n\n${profileContext}` : "";
+
   const res = await chat(ctx, {
     system,
     maxTokens: 1500,
-    user: `Fecha de referencia: ${referenceDate} (${now.toLocaleDateString("es-ES", { weekday: "long" })})
+    user: `Fecha de referencia: ${referenceDate} (${now.toLocaleDateString("es-ES", { weekday: "long" })})${profileSection}
 
 Describe el día que quiero planificar:
 """

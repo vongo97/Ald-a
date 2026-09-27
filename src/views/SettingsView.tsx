@@ -12,6 +12,9 @@ import {
 import { exportDataToJSON, importDataFromJSON } from "@/store/sync";
 import { supabase } from "@/store/supabase";
 import { THEMES } from "@/store/themes";
+import { loadProfile, saveProfile, clearProfile, pushProfile } from "@/store/profile";
+import { PROFILE_QUESTIONS, type UserProfile } from "@/domain/profile";
+import ProfileQuestionnaire from "@/components/ProfileQuestionnaire";
 
 export default function SettingsView() {
   const { settings, saveSettings } = useSettings();
@@ -313,6 +316,15 @@ export default function SettingsView() {
         </p>
       </div>
 
+      {/* ── Sección Mi Perfil ── */}
+      <div className="mt-6 rounded-xl border border-theme bg-surface p-4">
+        <h2 className="mb-3 text-sm font-semibold text-primary">👤 Mi Perfil</h2>
+        <p className="mb-3 text-xs text-muted">
+          La IA lee tu perfil para personalizar horarios y recomendaciones.
+        </p>
+        <ProfileSettingsSection />
+      </div>
+
       {/* ── Sección Apariencia ── */}
       <div className="mt-6 rounded-xl border border-theme bg-surface p-4">
         <h2 className="mb-3 text-sm font-semibold text-primary">🎨 Apariencia</h2>
@@ -507,5 +519,79 @@ export default function SettingsView() {
         </div>
       </div>
     </section>
+  );
+}
+
+/** Sección de perfil en Ajustes: ver, editar o hacer el cuestionario. */
+function ProfileSettingsSection() {
+  const pushToast = useStore((s) => s.pushToast);
+  const [profile, setProfile] = useState<UserProfile | null>(() => loadProfile());
+  const [editing, setEditing] = useState(false);
+
+  const handleDelete = () => {
+    if (!confirm("¿Eliminar tu perfil? La IA dejará de personalizar recomendaciones.")) return;
+    clearProfile();
+    setProfile(null);
+    pushToast("Perfil eliminado");
+  };
+
+  const handleSync = async () => {
+    const ok = await pushProfile();
+    pushToast(ok ? "Perfil sincronizado con la nube" : "No se pudo sincronizar (¿iniciaste sesión?)");
+  };
+
+  if (editing || !profile) {
+    return (
+      <ProfileQuestionnaire
+        canCancel={!!profile}
+        onCancel={() => setEditing(false)}
+        onComplete={() => {
+          setProfile(loadProfile());
+          setEditing(false);
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-lg bg-surface-hover px-3 py-2">
+          <span className="text-muted">☀️ Despertar</span>
+          <span className="ml-2 text-primary font-medium">{profile.wakeTime}</span>
+        </div>
+        <div className="rounded-lg bg-surface-hover px-3 py-2">
+          <span className="text-muted">🌙 Dormir</span>
+          <span className="ml-2 text-primary font-medium">{profile.sleepTime}</span>
+        </div>
+        <div className="rounded-lg bg-surface-hover px-3 py-2">
+          <span className="text-muted">🧠 Cronotipo</span>
+          <span className="ml-2 text-primary font-medium capitalize">{profile.chronotype}</span>
+        </div>
+        <div className="rounded-lg bg-surface-hover px-3 py-2">
+          <span className="text-muted">💼 Trabajo</span>
+          <span className="ml-2 text-primary font-medium">{profile.workStart}–{profile.workEnd}</span>
+        </div>
+        <div className="rounded-lg bg-surface-hover px-3 py-2 col-span-2">
+          <span className="text-muted">🏃 Actividades</span>
+          <span className="ml-2 text-primary font-medium">{profile.activities.join(", ") || "—"}</span>
+        </div>
+        <div className="rounded-lg bg-surface-hover px-3 py-2 col-span-2">
+          <span className="text-muted">☕ Descanso</span>
+          <span className="ml-2 text-primary font-medium">{profile.breakMin} min</span>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setEditing(true)} className="btn-ghost text-xs">
+          ✏️ Editar
+        </button>
+        <button type="button" onClick={() => void handleSync()} className="btn-ghost text-xs">
+          ☁️ Sincronizar
+        </button>
+        <button type="button" onClick={handleDelete} className="btn-danger text-xs ml-auto">
+          🗑️ Eliminar
+        </button>
+      </div>
+    </div>
   );
 }

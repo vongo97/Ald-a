@@ -4,6 +4,8 @@ import { useSettings } from "@/store/SettingsContext";
 import { db, newId } from "@/store/db";
 import { autoPushTasks } from "@/store/sync";
 import { parseDayPlan, type PlannedTask } from "@/llm/planParser";
+import { loadProfile } from "@/store/profile";
+import { profileToPrompt } from "@/domain/profile";
 import { toISODate, startOfDay } from "@/domain/dateutils";
 import { useDialogA11y } from "@/hooks/useDialogA11y";
 import type { Task } from "@/domain/types";
@@ -53,7 +55,11 @@ export default function DayPlanModal({ open, onClose }: DayPlanModalProps) {
       const existing = (await db.tasks.where("dueDate").equals(refDate).toArray())
         .filter((t) => !t.deletedAt && t.status === "todo");
 
-      const res = await parseDayPlan({ settings }, text, refDate, existing);
+      // Perfil del usuario como contexto personalizado
+      const profile = loadProfile();
+      const profileContext = profile ? profileToPrompt(profile) : "";
+
+      const res = await parseDayPlan({ settings }, text, refDate, existing, profileContext);
       if (!res.ok || !res.data) {
         setError(res.error ?? "No se pudo analizar el texto");
         setPhase("input");

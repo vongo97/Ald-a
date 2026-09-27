@@ -15,6 +15,8 @@ import ReviewView from "@/views/ReviewView";
 import SearchView from "@/views/SearchView";
 import SettingsView from "@/views/SettingsView";
 import OverdueRescheduleModal from "@/components/OverdueRescheduleModal";
+import ProfileQuestionnaire from "@/components/ProfileQuestionnaire";
+import { loadProfile } from "@/store/profile";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/store/db";
 import { pullAndSyncFromSupabase } from "@/store/sync";
@@ -35,7 +37,15 @@ function AppInner() {
   const pushToast = useStore((s) => s.pushToast);
   const theme = useStore((s) => s.theme);
   const [showNotifBanner, setShowNotifBanner] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const pulledFor = useRef<string | null>(null);
+
+  // Mostrar cuestionario de perfil si no existe (primer uso)
+  useEffect(() => {
+    if (!loadProfile()) {
+      setShowProfile(true);
+    }
+  }, []);
 
   // Cargar sesión inicial de Supabase
   useEffect(() => {
@@ -180,6 +190,11 @@ function AppInner() {
       <CaptureModal />
       <Toasts />
       <OverdueRescheduleModal />
+
+      {/* Cuestionario de perfil — primer uso */}
+      {showProfile && (
+        <ProfileQuestionnaire onComplete={() => setShowProfile(false)} />
+      )}
 
       {/* Dock flotante estilo macOS: reemplaza a Nav y al botón "+" suelto */}
       <Dock />
