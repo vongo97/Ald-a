@@ -125,7 +125,7 @@ export default function CaptureModal() {
     const parent = await createTaskFromCapture(parsedNow);
     pushToast(
       failMsg
-        ? `⚠️ No se pudo estructurar con la IA: ${failMsg}. Tarea creada tal cual.`
+        ? `⚠️ No se pudo estructurar: ${failMsg}. Tarea creada tal cual.`
         : long && !settings.apiKey.trim()
           ? "Tarea creada — configura la IA en Ajustes y los textos largos se dividirán en subtareas"
           : `Tarea creada: ${parent.title}`,

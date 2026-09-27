@@ -153,7 +153,38 @@ export async function chat(ctx: LlmContext, opts: FetchOptions): Promise<LlmResu
       }
     }
   }
-  return { ok: false, error: lastError, usedLlm: true };
+  // El crudo (con el cuerpo del proveedor) va a la consola para depurar;
+  // el motivo corto y accionable es lo que se muestra en la UI.
+  console.warn("[IA] fallo tras reintentos:", lastError);
+  return { ok: false, error: friendlyLlmError(lastError), usedLlm: true };
+}
+
+/**
+ * Traduce el error crudo del proveedor («HTTP 401: {json del proveedor}…»)
+ * a un motivo corto y accionable en español: es lo que aparece en los toasts
+ * de captura, desglose, plan y «Probar conexión». El texto crudo se queda en
+ * la consola del navegador.
+ */
+export function friendlyLlmError(raw: string): string {
+  const http = /HTTP (\d{3})/.exec(raw);
+  if (http) {
+    const s = http[1];
+    if (s === "401" || s === "403") return `clave API inválida o sin permisos — revísala en Ajustes [${s}]`;
+    if (s === "404") return `el modelo o la URL no existen en ese proveedor — revísalo en Ajustes [404]`;
+    if (s === "429") return `límite de uso alcanzado — prueba en unos minutos [429]`;
+    if (s === "400" || s === "422") return `el proveedor rechazó la petición — revisa el modelo en Ajustes [${s}]`;
+    if (s.startsWith("5")) return `el proveedor está caído (${s}) — prueba en unos minutos`;
+    return `el proveedor respondió ${s}`;
+  }
+  if (/Respuesta vac[ií]a/i.test(raw)) {
+    return "el modelo devolvió una respuesta vacía — prueba con otro modelo en Ajustes";
+  }
+  if (/abort/i.test(raw)) return "sin respuesta en 20 s — ¿sin conexión o proveedor lento?";
+  if (/failed to fetch|networkerror|fetch failed/i.test(raw)) {
+    return "sin conexión o el navegador bloqueó la petición";
+  }
+  if (/falta la clave API/i.test(raw)) return "falta la clave API — configúrala en Ajustes";
+  return raw.length > 90 ? `${raw.slice(0, 90)}…` : raw;
 }
 
 /** Extrae el primer objeto JSON de una respuesta (tolerante a ```json fences). */

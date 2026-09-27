@@ -2,6 +2,7 @@ import { db } from "./db";
 import { addSubtasks, updateTask } from "./actions";
 import { loadProfile } from "./profile";
 import { improveCapture } from "@/llm/tasks";
+import { friendlyLlmError } from "@/llm/client";
 import type { Settings } from "@/domain/types";
 
 /**
@@ -108,7 +109,7 @@ export async function autoBreakdownBlobs(
       } catch (err) {
         // sin red ahora: se reintenta en el próximo arranque
         result.failed += 1;
-        result.error ??= (err instanceof Error ? err.message : String(err)).slice(0, 80);
+        result.error ??= friendlyLlmError((err instanceof Error ? err.message : String(err)).slice(0, 300));
       }
     }
 

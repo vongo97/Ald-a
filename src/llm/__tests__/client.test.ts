@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chat, extractJson, llmStatus } from "../client";
+import { chat, extractJson, friendlyLlmError, llmStatus } from "../client";
 import type { Settings } from "@/domain/types";
 
 const settings: Settings = { provider: "openai", apiKey: "sk-test", model: "gpt-test", baseUrl: "" };
@@ -104,6 +104,40 @@ describe("chat", () => {
     expect(res.ok).toBe(false);
     expect(res.usedLlm).toBe(true);
     expect(fetchFn).toHaveBeenCalledTimes(3);
+  });
+
+  it("HTTP 401 persistente → error traducido a «clave API»", async () => {
+    vi.useFakeTimers();
+    const fetchFn = vi.fn().mockResolvedValue(new Response("bad key", { status: 401 }));
+    const p = chat({ settings, fetchFn }, { system: "s", user: "u" });
+    await vi.runAllTimersAsync();
+    const res = await p;
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain("clave API");
+    expect(res.error).toContain("401");
+    // El cuerpo crudo del proveedor no se cuela en la UI…
+    expect(res.error).not.toContain("bad key");
+  });
+});
+
+describe("friendlyLlmError", () => {
+  it("HTTP → motivo accionable en español", () => {
+    expect(friendlyLlmError('HTTP 401: {"error":{"message":"bad"}}')).toContain("clave API");
+    expect(friendlyLlmError("HTTP 404: no")).toContain("modelo");
+    expect(friendlyLlmError("HTTP 429: no")).toContain("límite");
+    expect(friendlyLlmError("HTTP 500: no")).toContain("caído");
+    expect(friendlyLlmError("HTTP 418: no")).toContain("418");
+  });
+
+  it("timeout, red y respuesta vacía", () => {
+    expect(friendlyLlmError("The user aborted a request.")).toContain("20 s");
+    expect(friendlyLlmError("Failed to fetch")).toContain("conexión");
+    expect(friendlyLlmError("Respuesta vacía del modelo")).toContain("modelo");
+  });
+
+  it("desconocido: se pasa recortado", () => {
+    expect(friendlyLlmError("algo raro")).toBe("algo raro");
+    expect(friendlyLlmError("x".repeat(200))).toHaveLength(91); // 90 + "…"
   });
 });
 
