@@ -51,16 +51,20 @@ export default function CaptureModal() {
   const submit = async () => {
     if (!text.trim()) return closeCapture();
     const parsedNow = parseCapture(text, { projects: projects ?? [] });
+    const long = text.trim().length >= STRUCTURE_MIN_CHARS;
+    // Motivo del último intento fallido (para no fallar en silencio).
+    let failMsg: string | null = null;
 
     // Texto largo + IA disponible → estructurar de una vez: la IA propone un
     // título corto (¡no el párrafo entero!) y las subtareas que contiene el
-    // texto, con sus horas si las trae. Si la IA falla, se crea tal cual.
-    if (settings.apiKey.trim() && text.trim().length >= STRUCTURE_MIN_CHARS) {
+    // texto, con sus horas si las trae. Si la IA falla, se crea tal cual y se
+    // avisa (antes el fallo era invisible y parecía que la IA no hacía nada).
+    if (long && settings.apiKey.trim()) {
       setImproving(true);
       let structured: { parsed: ParsedCapture; subtasks: CaptureSubtask[] } | null = null;
       try {
         const res = await improveCapture({ settings }, text);
-        if (res.ok && res.data?.title.trim()) {
+        if (res.ok && res.data?.title.trim() && res.data.title.trim().length <= 160) {
           const imp = res.data;
           const prio: Priority | undefined =
             typeof imp.priority === "number" && imp.priority >= 1 && imp.priority <= 4
@@ -79,9 +83,14 @@ export default function CaptureModal() {
             },
             subtasks: imp.subtasks ?? [],
           };
+        } else {
+          failMsg = (!res.ok
+            ? (res.error ?? "error desconocido")
+            : "la IA devolvió el texto entero como título"
+          ).slice(0, 90);
         }
-      } catch {
-        // sin red o error del LLM: captura normal (más abajo)
+      } catch (err) {
+        failMsg = (err instanceof Error ? err.message : String(err)).slice(0, 90);
       }
       setImproving(false);
 
@@ -89,15 +98,25 @@ export default function CaptureModal() {
         const parent = await createTaskFromCapture(structured.parsed);
         const n = structured.subtasks.length;
         if (n > 0) await addSubtasks(parent, structured.subtasks);
-        pushToast(n > 0 ? `✨ «${parent.title}» + ${n} subtareas` : `Tarea creada: ${parent.title}`);
+        pushToast(
+          n > 0
+            ? `✨ «${parent.title}» + ${n} subtareas`
+            : `✨ «${parent.title}» creada — la IA no propuso subtareas`,
+        );
         setText("");
         closeCapture();
         return;
       }
     }
 
-    await createTaskFromCapture(parsedNow);
-    pushToast(`Tarea creada: ${parsedNow.title}`);
+    const parent = await createTaskFromCapture(parsedNow);
+    pushToast(
+      failMsg
+        ? `⚠️ No se pudo estructurar con la IA: ${failMsg}. Tarea creada tal cual.`
+        : long && !settings.apiKey.trim()
+          ? "Tarea creada — configura la IA en Ajustes y los textos largos se dividirán en subtareas"
+          : `Tarea creada: ${parent.title}`,
+    );
     setText("");
     closeCapture();
   };
