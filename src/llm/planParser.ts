@@ -17,6 +17,8 @@ export interface PlannedTask {
 export interface DayPlanResult {
   /** Fecha detectada en el texto (ISO "YYYY-MM-DD"). */
   date: string;
+  /** Título corto propuesto por la IA para la tarea padre del plan. */
+  planTitle?: string;
   /** Tareas propuestas en orden. */
   tasks: PlannedTask[];
   /** Advertencia si el día está sobrecargado. */
@@ -40,11 +42,13 @@ REGLAS:
 7. Si una actividad es compleja y tiene sub-actividades naturales, usa "children" para anidarlas (ej: "Trabajar" → ["Revisar emails", "Escribir informe"]). OBLIGATORIO: cada child DEBE tener start y end propios (reparte el bloque horario del padre entre sus children, sin solapes).
 8. Si todas las actividades no caben en el día, añade un campo "warning" explicándolo en español.
 9. El campo "reason" (razón) SIEMPRE en español, máximo 8 palabras.
-10. Responde SOLO con JSON válido, sin markdown adicional.
+10. Añade "planTitle": un título corto y descriptivo del día completo (máx. 10 palabras, en español) que servirá de tarea padre. Ej: "Día cargado: gimnasio, teletrabajo, reunión e inglés".
+11. Responde SOLO con JSON válido, sin markdown adicional.
 
 Formato de respuesta:
 {
   "date": "YYYY-MM-DD",
+  "planTitle": "Título del día completo (máx. 10 palabras)",
   "tasks": [
     {
       "title": "Título corto de la actividad",
@@ -131,10 +135,14 @@ ${input}
     return { ok: false, error: "El modelo no devolvió tareas válidas", usedLlm: true };
   }
 
+  const planTitle =
+    typeof parsed.planTitle === "string" && parsed.planTitle.trim() ? parsed.planTitle.trim() : undefined;
+
   return {
     ok: true,
     data: {
       date: parsed.date || referenceDate,
+      planTitle,
       tasks,
       warning: typeof parsed.warning === "string" ? parsed.warning : undefined,
     },

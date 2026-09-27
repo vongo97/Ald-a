@@ -24,6 +24,7 @@ export default function DayPlanModal({ open, onClose }: DayPlanModalProps) {
   const [text, setText] = useState("");
   const [tasks, setTasks] = useState<PlannedTask[]>([]);
   const [planDate, setPlanDate] = useState<string>(toISODate(startOfDay(new Date())));
+  const [planTitle, setPlanTitle] = useState("");
   const [warning, setWarning] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useDialogA11y<HTMLDivElement>(open, onClose);
@@ -34,6 +35,7 @@ export default function DayPlanModal({ open, onClose }: DayPlanModalProps) {
       setPhase("input");
       setText("");
       setTasks([]);
+      setPlanTitle("");
       setWarning(undefined);
       setError(null);
       requestAnimationFrame(() => textareaRef.current?.focus());
@@ -67,6 +69,7 @@ export default function DayPlanModal({ open, onClose }: DayPlanModalProps) {
       }
       setTasks(res.data.tasks);
       setPlanDate(res.data.date);
+      setPlanTitle(res.data.planTitle ?? "");
       setWarning(res.data.warning);
       setPhase("review");
     } catch (err) {
@@ -136,11 +139,13 @@ export default function DayPlanModal({ open, onClose }: DayPlanModalProps) {
       const order = (await db.tasks.where("status").equals("todo").count()) || 0;
       const now = new Date().toISOString();
 
-      // 1. Crear tarea padre "Plan del día" (sin timeBlock)
+      // 1. Crear tarea padre con el título propuesto por la IA (editable en
+      //    revisión; si lo dejaron vacío, el de siempre con la fecha).
+      const parentTitle = planTitle.trim() || `Plan del día — ${planDate}`;
       const planId = newId();
       const planTask: Task = {
         id: planId,
-        title: `Plan del día — ${planDate}`,
+        title: parentTitle,
         labels: ["plan"],
         dueDate: planDate,
         priority: 3,
@@ -206,7 +211,7 @@ export default function DayPlanModal({ open, onClose }: DayPlanModalProps) {
       await db.tasks.bulkPut(all);
       void autoPushTasks(all);
       const count = valid.length;
-      pushToast(`Plan confirmado: ${count} actividad${count !== 1 ? "es" : ""} para el ${planDate}`);
+      pushToast(`Plan «${parentTitle}»: ${count} actividad${count !== 1 ? "es" : ""} para el ${planDate}`);
       onClose();
     } catch (err) {
       pushToast(`Error: ${err instanceof Error ? err.message : String(err)}`);
@@ -400,6 +405,24 @@ export default function DayPlanModal({ open, onClose }: DayPlanModalProps) {
                 ⚠️ {warning}
               </div>
             )}
+
+            {/* Título de la tarea padre: lo propone la IA y es editable aquí.
+                Al confirmar, las actividades de abajo se crean como sus
+                subtareas (con su timeBlock). */}
+            <div className="mb-2">
+              <label htmlFor="dayplan-title" className="mb-1 block text-xs text-muted">
+                ✨ Título propuesto por la IA — será la tarea padre; las actividades de abajo, sus
+                subtareas
+              </label>
+              <input
+                id="dayplan-title"
+                type="text"
+                value={planTitle}
+                onChange={(e) => setPlanTitle(e.target.value)}
+                placeholder={`Plan del día — ${planDate}`}
+                className="input px-2 py-1.5 text-sm font-semibold"
+              />
+            </div>
 
             <ul className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
               {tasks.map((task, i) => renderTask(task, [i]))}
