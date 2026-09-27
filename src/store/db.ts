@@ -21,7 +21,7 @@ export class TareasDB extends Dexie {
     });
     // v2: tabla de tumbas para propagar borrados offline.
     this.version(2).stores({
-      tombstones: "kind+id, updatedAt",
+      tombstones: "[kind+id], updatedAt",
     });
   }
 }
