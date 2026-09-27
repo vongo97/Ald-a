@@ -251,11 +251,22 @@ export default function DayPlanModal({ open, onClose }: DayPlanModalProps) {
             className={`input px-2 py-1 ${isChild ? "text-xs" : "text-sm"} flex-1`}
             aria-label="Título"
           />
-          {task.labels.length > 0 && (
-            <span className="chip bg-surface-hover text-muted text-xs shrink-0">
-              {task.labels.map((l) => `@${l}`).join(" ")}
-            </span>
-          )}
+          {/* Etiquetas editables */}
+          <input
+            type="text"
+            value={task.labels.join(" ")}
+            onChange={(e) => {
+              const labels = e.target.value
+                .split(/\s+/)
+                .filter(Boolean)
+                .map((l) => l.replace(/^@/, ""));
+              updateAt(path, { labels });
+            }}
+            placeholder="@etiquetas"
+            className="input w-24 px-1.5 py-1 text-xs"
+            aria-label="Etiquetas (separadas por espacio)"
+            title="Etiquetas separadas por espacio"
+          />
           {task.reason && (
             <span
               className="text-xs text-muted italic shrink-0 max-w-24 truncate hidden sm:block"
