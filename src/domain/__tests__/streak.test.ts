@@ -45,13 +45,48 @@ describe("dayStat", () => {
     expect(st).toMatchObject({ total: 3, done: 3, fulfilled: true });
   });
 
-  it("las borradas quedan fuera y un día sin tareas no cumple", () => {
+  it("borrar NO cambia el % (auditoría): lo pendiente borrado sigue restando", () => {
     const tasks = [
       ...day("2026-09-28", 2, 2),
       task({ dueDate: "2026-09-28", status: "todo", deletedAt: "2026-09-28T10:00:00.000Z" }),
     ];
-    expect(dayStat(tasks, "2026-09-28")).toMatchObject({ total: 2, done: 2, fulfilled: true });
+    // La borrada pendiente cuenta tal cual estaba: 2 de 3 = 66 % < 70 %.
+    expect(dayStat(tasks, "2026-09-28")).toMatchObject({
+      total: 3,
+      done: 2,
+      fulfilled: false,
+    });
+    // Una borrada ya hecha sigue sumando como done.
+    const doneAndDeleted = [
+      ...day("2026-09-28", 1, 1),
+      task({
+        dueDate: "2026-09-28",
+        status: "done",
+        deletedAt: "2026-09-28T10:00:00.000Z",
+      }),
+    ];
+    expect(dayStat(doneAndDeleted, "2026-09-28")).toMatchObject({
+      total: 2,
+      done: 2,
+      fulfilled: true,
+    });
     expect(dayStat(tasks, "2026-09-29").fulfilled).toBe(false);
+  });
+
+  it("subtarea sin dueDate cuenta en el día del padre (bug: no movía la barra)", () => {
+    const tasks = [
+      task({ id: "padre", dueDate: "2026-09-28", status: "todo" }),
+      task({ id: "h1", parentId: "padre", status: "todo" }), // sin fecha propia
+      task({ id: "h2", parentId: "padre", status: "done" }),
+    ];
+    // El padre es contenedor; la hoja sin fecha hereda la suya → 1 de 2.
+    expect(dayStat(tasks, "2026-09-28")).toMatchObject({ total: 2, done: 1 });
+    tasks[1].status = "done"; // al completarla, la barra llega al 100 %
+    expect(dayStat(tasks, "2026-09-28")).toMatchObject({
+      total: 2,
+      done: 2,
+      fulfilled: true,
+    });
   });
 });
 

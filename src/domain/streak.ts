@@ -4,16 +4,25 @@ import { addDays, parseISODate, toISODate } from "./dateutils";
 /**
  * Racha del panel «Hoy».
  *
- * Regla de día cumplido (elegida por el usuario): ≥ 70 % de las tareas de ese
- * día terminadas. Detalles importantes:
- *  - Cuentan solo las tareas HOJA: los contenedores (padres de subtareas) no
- *    entran en el %, así marcar las 5 subtareas de un plan no lo arrastraba
- *    un padre sin marcar.
- *  - Los días sin tareas NO cumplen (rompen la racha).
- *  - Hoy todavía en curso nunca rompe la racha: si aún no llega al 70 %, se
- *    empieza a contar desde ayer.
- *  - Todo se deriva de las tareas existentes: cero migraciones, funciona
- *    offline y comparte datos con la futura tarjeta de compartir.
+ * Regla de día cumplido (elegida por el usuario): ≥ 70 % de las tareas de
+ * ese día terminadas. En la auditoría posterior el usuario detectó dos
+ * bugs de dinámica, ya corregidos:
+ *
+ *  - **Borrar no cambia el %**: las filas borradas cuentan tal cual estaban
+ *    (hechas siguen sumando, pendientes siguen restando). Antes, borrar
+ *    pendientes inflaba la barra sin cumplir nada.
+ *  - **La fecha efectiva sube por la cadena de padres**: subtareas creadas
+ *    sin `dueDate` (alta manual o desglose sin horario) cuentan en el día de
+ *    su progenitor; antes, completarlas no movía la barra.
+ *
+ * Y las reglas de siempre: solo cuentan las tareas HOJA (los contenedores
+ * no entran en el %), los días sin tareas no cumplen y hoy en curso nunca
+ * rompe la racha (se cuenta desde ayer). Todo se deriva de las tareas:
+ * cero migraciones y funciona offline.
+ *
+ * OJO: la purga de la papelera (30 días) borra filas físicamente y podría
+ * alterar el histórico muy antiguo — se asume por ahora; una tabla de
+ * resumen diario lo resolverá en la fase de estadísticas.
  */
 export const DAY_FULFILL_RATIO = 0.7;
 
@@ -22,7 +31,7 @@ export const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100, 365];
 
 export interface DayStat {
   date: string; // ISO "YYYY-MM-DD"
-  total: number; // tareas hoja con fecha ese día (no borradas)
+  total: number; // tareas hoja atribuibles a ese día
   done: number;
   fulfilled: boolean;
 }
@@ -36,28 +45,49 @@ export interface WeekDot {
   state: DotState;
 }
 
-/** Tareas que son padre de alguna otra viva: los contenedores no cuentan. */
-function parentIds(tasks: Task[]): Set<string> {
-  const ids = new Set<string>();
-  for (const t of tasks) if (t.parentId && !t.deletedAt) ids.add(t.parentId);
-  return ids;
+interface TaskIndex {
+  byId: Map<string, Task>;
+  /** Tareas que son padre de alguna otra: contenedores, fuera del %. */
+  parents: Set<string>;
 }
 
-function statFor(active: Task[], parents: Set<string>, date: string): DayStat {
+function buildIndex(tasks: Task[]): TaskIndex {
+  const byId = new Map<string, Task>();
+  const parents = new Set<string>();
+  for (const t of tasks) {
+    byId.set(t.id, t);
+    if (t.parentId) parents.add(t.parentId);
+  }
+  return { byId, parents };
+}
+
+/** Día al que pertenece la tarea: la propia fecha o, si no la tiene, la del padre. */
+function effectiveDate(t: Task, byId: Map<string, Task>): string | undefined {
+  let cur = t;
+  for (let hop = 0; hop < 12 && !cur.dueDate; hop++) {
+    if (!cur.parentId) break;
+    const parent = byId.get(cur.parentId);
+    if (!parent) break;
+    cur = parent;
+  }
+  return cur.dueDate;
+}
+
+function statFor(index: TaskIndex, date: string): DayStat {
   let total = 0;
   let done = 0;
-  for (const t of active) {
-    if (t.dueDate !== date || parents.has(t.id)) continue;
+  for (const t of index.byId.values()) {
+    if (index.parents.has(t.id)) continue;
+    if (effectiveDate(t, index.byId) !== date) continue;
     total++;
     if (t.status === "done") done++;
   }
   return { date, total, done, fulfilled: total > 0 && done / total >= DAY_FULFILL_RATIO };
 }
 
-/** Estadística de un día concreto (las borradas quedan fuera). */
+/** Estadística de un día concreto. Las borradas cuentan tal cual estaban. */
 export function dayStat(tasks: Task[], date: string): DayStat {
-  const active = tasks.filter((t) => !t.deletedAt);
-  return statFor(active, parentIds(active), date);
+  return statFor(buildIndex(tasks), date);
 }
 
 export interface Streaks {
@@ -69,15 +99,17 @@ export interface Streaks {
 }
 
 export function computeStreaks(tasks: Task[], todayISO: string): Streaks {
-  const active = tasks.filter((t) => !t.deletedAt);
-  const parents = parentIds(active);
+  const index = buildIndex(tasks);
 
-  // Días con tareas → estadística una sola vez (la historia es acotada).
+  // Días con tareas (fecha efectiva) → estadística una sola vez.
   const dates = new Set<string>();
-  for (const t of active) if (t.dueDate) dates.add(t.dueDate);
+  for (const t of index.byId.values()) {
+    const d = effectiveDate(t, index.byId);
+    if (d) dates.add(d);
+  }
   const stats = new Map<string, DayStat>();
-  for (const d of dates) stats.set(d, statFor(active, parents, d));
-  const statAt = (iso: string): DayStat => stats.get(iso) ?? statFor(active, parents, iso);
+  for (const d of dates) stats.set(d, statFor(index, d));
+  const statAt = (iso: string): DayStat => stats.get(iso) ?? statFor(index, iso);
 
   const today = statAt(todayISO);
 
@@ -109,10 +141,9 @@ export function computeStreaks(tasks: Task[], todayISO: string): Streaks {
 
 const DOT_LABELS = ["d", "l", "m", "x", "j", "v", "s"]; // x = miércoles
 
-/** Puntos de la semana actual (lunes → domingo) para la tarjeta. */
+/** Puntos de la semana actual (lunes → domingo) — vive en el perfil. */
 export function weekDots(tasks: Task[], todayISO: string): WeekDot[] {
-  const active = tasks.filter((t) => !t.deletedAt);
-  const parents = parentIds(active);
+  const index = buildIndex(tasks);
   const today = parseISODate(todayISO);
   const monday = addDays(today, -((today.getDay() + 6) % 7));
 
@@ -120,7 +151,7 @@ export function weekDots(tasks: Task[], todayISO: string): WeekDot[] {
   for (let i = 0; i < 7; i++) {
     const d = addDays(monday, i);
     const iso = toISODate(d);
-    const st = statFor(active, parents, iso);
+    const st = statFor(index, iso);
     const state: DotState =
       iso > todayISO
         ? "future"

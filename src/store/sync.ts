@@ -58,7 +58,43 @@ export async function importDataFromJSON(file: File): Promise<void> {
 /** ID del usuario autenticado, o null si no hay sesión. */
 async function sessionUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
-  return data.session?.user?.id ?? null;
+  const id = data.session?.user?.id ?? null;
+  if (id) await ensureSyncOwner(id);
+  return id;
+}
+
+/** Cuenta dueña de los datos locales (evita mezclar cuentas en un dispositivo). */
+const SYNC_OWNER_KEY = "ald-a:sync-owner";
+
+/**
+ * Asegura que los datos locales pertenecen a `userId` ANTES de cualquier
+ * subida o bajada (todos los caminos pasan por `sessionUserId`).
+ *
+ *  - Primera cuenta del dispositivo → se conserva lo local: es la
+ *    migración natural (lo no sincronizado se sube a esa cuenta).
+ *  - Cambio de cuenta → se limpia tasks/projects/tombstones. Sin esto, lo
+ *    del usuario anterior se subiría con el `user_id` nuevo y las cuentas
+ *    se mezclarían; su dato sigue a salvo en SU cuenta.
+ *
+ * Best-effort: cualquier fallo (p. ej. sin localStorage en tests) no debe
+ * romper la sincronización.
+ */
+async function ensureSyncOwner(userId: string): Promise<void> {
+  try {
+    const owner = localStorage.getItem(SYNC_OWNER_KEY);
+    if (owner === userId) return;
+    if (owner !== null) {
+      console.info("[sync] Cambio de cuenta: se limpia lo local para no mezclar datos.");
+      await db.transaction("rw", db.tasks, db.projects, db.tombstones, async () => {
+        await db.tasks.clear();
+        await db.projects.clear();
+        await db.tombstones.clear();
+      });
+    }
+    localStorage.setItem(SYNC_OWNER_KEY, userId);
+  } catch (err) {
+    console.warn("[sync] No se pudo verificar la cuenta dueña de los datos:", err);
+  }
 }
 
 /**

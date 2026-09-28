@@ -15,6 +15,7 @@ import { THEMES } from "@/store/themes";
 import { loadProfile, saveProfile, clearProfile, pushProfile } from "@/store/profile";
 import { PROFILE_QUESTIONS, type UserProfile } from "@/domain/profile";
 import ProfileQuestionnaire from "@/components/ProfileQuestionnaire";
+import WeekStrip from "@/components/WeekStrip";
 
 export default function SettingsView() {
   const { settings, saveSettings } = useSettings();
@@ -559,6 +560,7 @@ function ProfileSettingsSection() {
 
   return (
     <div className="space-y-2">
+      <WeekStrip />
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-lg bg-surface-hover px-3 py-2">
           <span className="text-muted">☀️ Despertar</span>

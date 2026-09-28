@@ -210,6 +210,8 @@ export async function addSubtask(parent: Task, title: string): Promise<Task> {
     parentId: parent.id,
     order: count,
     createdAt: new Date().toISOString(),
+    // Hereda el día del padre: si no, al completarla no movía el % del día.
+    ...(parent.dueDate ? { dueDate: parent.dueDate } : {}),
   };
   await db.tasks.put(t);
   void autoPushTask(t);
@@ -238,14 +240,15 @@ export async function addSubtasks(
     parentId: parent.id,
     order: base + i,
     createdAt: new Date().toISOString(),
-    // Subtarea con horario (plan del día / captura estructurada): nace con
-    // timeBlock y la fecha del padre, así aparece en la vista Día — misma
+    // SIEMPRE hereda el día del padre: si no, al completarla no movía el
+    // % del día (bug de la auditoría de racha: «se llena si borro, no si
+    // cumplo»). Las que llevan horario además nacen con timeBlock, misma
     // regla que sigue SubtaskTimePanel al bloquear horas.
+    ...(parent.dueDate ? { dueDate: parent.dueDate } : {}),
     ...(s.start && s.end
       ? {
           timeBlock: { start: s.start, end: s.end },
           durationMin: s.durationMin ?? timeToMin(s.end) - timeToMin(s.start),
-          ...(parent.dueDate ? { dueDate: parent.dueDate } : {}),
         }
       : s.durationMin
         ? { durationMin: s.durationMin }
