@@ -6,6 +6,7 @@ import { SettingsProvider } from "@/store/SettingsContext";
 import Dock from "@/components/Dock";
 import CaptureModal from "@/components/CaptureModal";
 import Toasts from "@/components/Toasts";
+import DayCelebration from "@/components/DayCelebration";
 import TodayView from "@/views/TodayView";
 import DayView from "@/views/DayView";
 import InboxView from "@/views/InboxView";
@@ -235,6 +236,7 @@ function AppInner() {
 
       <CaptureModal />
       <Toasts />
+      <DayCelebration />
       <OverdueRescheduleModal />
 
       {/* Cuestionario de perfil — primer uso */}
