@@ -106,7 +106,7 @@ describe("chat", () => {
     expect(fetchFn).toHaveBeenCalledTimes(3);
   });
 
-  it("HTTP 401 persistente → error traducido a «clave API»", async () => {
+  it("HTTP 401 → sin reintentos (4xx no sirve de nada) y error traducido", async () => {
     vi.useFakeTimers();
     const fetchFn = vi.fn().mockResolvedValue(new Response("bad key", { status: 401 }));
     const p = chat({ settings, fetchFn }, { system: "s", user: "u" });
@@ -117,6 +117,8 @@ describe("chat", () => {
     expect(res.error).toContain("401");
     // El cuerpo crudo del proveedor no se cuela en la UI…
     expect(res.error).not.toContain("bad key");
+    // …y no se gastan reintentos con una clave que no va a funcionar
+    expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
   it("respuesta vacía → reintenta con presupuesto holgado (4096) y luego funciona", async () => {
@@ -150,6 +152,39 @@ describe("chat", () => {
     expect(res.error).toContain("vacía");
     expect(fetchFn).toHaveBeenCalledTimes(3);
   });
+
+  it("429 de ráfaga: sin reintentos y aviso con el modelo", async () => {
+    vi.useFakeTimers();
+    const fetchFn = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error: { message: "Rate limit reached for requests" } }), {
+          status: 429,
+        }),
+      ),
+    );
+    const p = chat({ settings, fetchFn }, { system: "s", user: "u" });
+    await vi.runAllTimersAsync();
+    const res = await p;
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain("peticiones");
+    expect(res.error).toContain("gpt-test");
+    // Un 429 no se reintenta: cada intento cuenta contra la cuota
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("429 de cuota: distingue el tipo de límite", async () => {
+    const fetchFn = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error: { message: "You exceeded your current quota" } }), {
+          status: 429,
+        }),
+      ),
+    );
+    const res = await chat({ settings, fetchFn }, { system: "s", user: "u" });
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain("cuota");
+    expect(res.error).toContain("gpt-test");
+  });
 });
 
 describe("friendlyLlmError", () => {
@@ -159,6 +194,16 @@ describe("friendlyLlmError", () => {
     expect(friendlyLlmError("HTTP 429: no")).toContain("límite");
     expect(friendlyLlmError("HTTP 500: no")).toContain("caído");
     expect(friendlyLlmError("HTTP 418: no")).toContain("418");
+  });
+
+  it("429: modelo incluido y ráfaga distinguible de cuota", () => {
+    expect(friendlyLlmError("HTTP 429: no", "gpt-x")).toContain("gpt-x");
+    expect(friendlyLlmError("HTTP 429: Rate limit reached for requests", "gpt-x")).toContain(
+      "peticiones",
+    );
+    expect(friendlyLlmError('HTTP 429: {"message":"exceeded your current quota"}', "gpt-x")).toContain(
+      "cuota",
+    );
   });
 
   it("timeout, red y respuesta vacía", () => {

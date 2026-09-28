@@ -48,18 +48,19 @@ interface FetchOptions {
   signal?: AbortSignal;
 }
 
+/** Modelo realmente usado (por defecto del proveedor si no hay elección). */
+function resolveModel(settings: Settings): string {
+  if (settings.provider === "gemini") return settings.model.trim() || "gemini-3.8-flash";
+  if (settings.provider === "anthropic") return settings.model || "claude-haiku-4.5";
+  return settings.model || (settings.provider === "groq" ? "openai/gpt-oss-20b" : "gpt-4o");
+}
+
 async function chatOnce(ctx: LlmContext, opts: FetchOptions): Promise<string> {
   const { settings } = ctx;
   const fetchFn = ctx.fetchFn ?? fetch;
-  // El modelo realmente usado (por defecto del proveedor si no hay elección):
-  // se incluye en el error de «respuesta vacía» para que el aviso diga qué
-  // modelo falla.
-  const model =
-    settings.provider === "gemini"
-      ? settings.model.trim() || "gemini-3.8-flash"
-      : settings.provider === "anthropic"
-        ? settings.model || "claude-haiku-4.5"
-        : settings.model || (settings.provider === "groq" ? "openai/gpt-oss-20b" : "gpt-4o");
+  // El modelo se incluye en los errores («respuesta vacía», «límite») para
+  // que el aviso diga qué modelo falla.
+  const model = resolveModel(settings);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   if (opts.signal) opts.signal.addEventListener("abort", () => controller.abort(), { once: true });
@@ -148,6 +149,7 @@ export async function chat(ctx: LlmContext, opts: FetchOptions): Promise<LlmResu
     return { ok: false, error: "IA desactivada: falta la clave API", usedLlm: false };
   }
   let lastError = "";
+  const model = resolveModel(ctx.settings);
   // Modelos de razonamiento: se gastan los tokens pensando y el contenido
   // final sale vacío. Ante «respuesta vacía» se reintenta con presupuesto
   // holgado — el tope (max_tokens) solo limita lo máximo, se paga lo que se
@@ -163,6 +165,9 @@ export async function chat(ctx: LlmContext, opts: FetchOptions): Promise<LlmResu
         maxTokens = 4096;
       }
       if (opts.signal?.aborted) break;
+      // 4xx (clave, modelo, cuota…): reintentar no arregla nada y cada
+      // intento cuenta contra la cuota — se falla ya con el motivo.
+      if (/^HTTP 4\d\d/.test(lastError)) break;
       if (attempt < RETRIES) {
         const wait = BACKOFF_MS * 2 ** attempt;
         await new Promise((r) => setTimeout(r, wait));
@@ -172,22 +177,34 @@ export async function chat(ctx: LlmContext, opts: FetchOptions): Promise<LlmResu
   // El crudo (con el cuerpo del proveedor) va a la consola para depurar;
   // el motivo corto y accionable es lo que se muestra en la UI.
   console.warn("[IA] fallo tras reintentos:", lastError);
-  return { ok: false, error: friendlyLlmError(lastError), usedLlm: true };
+  return { ok: false, error: friendlyLlmError(lastError, model), usedLlm: true };
 }
 
 /**
  * Traduce el error crudo del proveedor («HTTP 401: {json del proveedor}…»)
  * a un motivo corto y accionable en español: es lo que aparece en los toasts
  * de captura, desglose, plan y «Probar conexión». El texto crudo se queda en
- * la consola del navegador.
+ * la consola del navegador. `model` (opcional) se incluye en los avisos para
+ * que digan qué modelo falla.
  */
-export function friendlyLlmError(raw: string): string {
+export function friendlyLlmError(raw: string, model = ""): string {
   const http = /HTTP (\d{3})/.exec(raw);
   if (http) {
     const s = http[1];
     if (s === "401" || s === "403") return `clave API inválida o sin permisos — revísala en Ajustes [${s}]`;
     if (s === "404") return `el modelo o la URL no existen en ese proveedor — revísalo en Ajustes [404]`;
-    if (s === "429") return `límite de uso alcanzado — prueba en unos minutos [429]`;
+    if (s === "429") {
+      const m = model ? ` en «${model}»` : "";
+      // Ráfaga (pocas por minuto → se pasa en segundos) vs cuota del plan
+      // (tokens al día/mes → hasta que se recargue o se suba de plan).
+      if (/per minute|per_second|requests per|rate.?limit|too many requests/i.test(raw)) {
+        return `límite de peticiones${m} — espera unos segundos y vuelve a intentarlo [429]`;
+      }
+      if (/quota|exceeded your current|per day|daily|usage limit/i.test(raw)) {
+        return `límite de uso agotado (cuota del plan)${m} — espera horas o revisa tu plan en Ajustes [429]`;
+      }
+      return `límite de uso${m} — prueba en unos minutos [429]`;
+    }
     if (s === "400" || s === "422") return `el proveedor rechazó la petición — revisa el modelo en Ajustes [${s}]`;
     if (s.startsWith("5")) return `el proveedor está caído (${s}) — prueba en unos minutos`;
     return `el proveedor respondió ${s}`;
