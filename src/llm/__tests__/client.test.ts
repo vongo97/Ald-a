@@ -118,6 +118,38 @@ describe("chat", () => {
     // El cuerpo crudo del proveedor no se cuela en la UI…
     expect(res.error).not.toContain("bad key");
   });
+
+  it("respuesta vacía → reintenta con presupuesto holgado (4096) y luego funciona", async () => {
+    vi.useFakeTimers();
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(okResponse({ choices: [{ message: { content: "" } }] }))
+      .mockResolvedValueOnce(okResponse({ choices: [{ message: { content: "ok" } }] }));
+    const p = chat({ settings, fetchFn }, { system: "s", user: "u", maxTokens: 800 });
+    await vi.runAllTimersAsync();
+    const res = await p;
+    expect(res.ok).toBe(true);
+    expect(res.data).toBe("ok");
+    const body0 = JSON.parse(String((fetchFn.mock.calls[0] as [string, RequestInit])[1].body));
+    const body1 = JSON.parse(String((fetchFn.mock.calls[1] as [string, RequestInit])[1].body));
+    expect(body0.max_tokens).toBe(800);
+    expect(body1.max_tokens).toBe(4096);
+  });
+
+  it("respuesta vacía persistente → error con el nombre del modelo", async () => {
+    vi.useFakeTimers();
+    // Response nueva en cada intento: el body solo se puede leer una vez
+    const fetchFn = vi.fn().mockImplementation(() =>
+      Promise.resolve(okResponse({ choices: [{ message: { content: "" } }] })),
+    );
+    const p = chat({ settings, fetchFn }, { system: "s", user: "u" });
+    await vi.runAllTimersAsync();
+    const res = await p;
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain("gpt-test");
+    expect(res.error).toContain("vacía");
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+  });
 });
 
 describe("friendlyLlmError", () => {
@@ -133,6 +165,10 @@ describe("friendlyLlmError", () => {
     expect(friendlyLlmError("The user aborted a request.")).toContain("20 s");
     expect(friendlyLlmError("Failed to fetch")).toContain("conexión");
     expect(friendlyLlmError("Respuesta vacía del modelo")).toContain("modelo");
+    // Con nombre de modelo (formato real de chatOnce) lo conserva en el aviso
+    expect(
+      friendlyLlmError("Respuesta vacía del modelo «openai/gpt-oss-20b»"),
+    ).toContain("openai/gpt-oss-20b");
   });
 
   it("desconocido: se pasa recortado", () => {

@@ -51,6 +51,15 @@ interface FetchOptions {
 async function chatOnce(ctx: LlmContext, opts: FetchOptions): Promise<string> {
   const { settings } = ctx;
   const fetchFn = ctx.fetchFn ?? fetch;
+  // El modelo realmente usado (por defecto del proveedor si no hay elección):
+  // se incluye en el error de «respuesta vacía» para que el aviso diga qué
+  // modelo falla.
+  const model =
+    settings.provider === "gemini"
+      ? settings.model.trim() || "gemini-3.8-flash"
+      : settings.provider === "anthropic"
+        ? settings.model || "claude-haiku-4.5"
+        : settings.model || (settings.provider === "groq" ? "openai/gpt-oss-20b" : "gpt-4o");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   if (opts.signal) opts.signal.addEventListener("abort", () => controller.abort(), { once: true });
@@ -83,14 +92,13 @@ async function chatOnce(ctx: LlmContext, opts: FetchOptions): Promise<string> {
           "anthropic-dangerous-direct-browser-access": "true",
         },
         body: JSON.stringify({
-          model: settings.model || "claude-haiku-4.5",
+          model,
           max_tokens: opts.maxTokens ?? 1024,
           system: opts.system,
           messages: [{ role: "user", content: opts.user }],
         }),
       });
     } else {
-      const defaultModel = settings.provider === "groq" ? "openai/gpt-oss-20b" : "gpt-4o";
       res = await fetchFn(endpoint(settings), {
         method: "POST",
         signal: controller.signal,
@@ -99,7 +107,7 @@ async function chatOnce(ctx: LlmContext, opts: FetchOptions): Promise<string> {
           authorization: `Bearer ${settings.apiKey}`,
         },
         body: JSON.stringify({
-          model: settings.model || defaultModel,
+          model,
           max_tokens: opts.maxTokens ?? 1024,
           messages: [
             { role: "system", content: opts.system },
@@ -119,7 +127,7 @@ async function chatOnce(ctx: LlmContext, opts: FetchOptions): Promise<string> {
     } else {
       text = ((json.choices as { message?: { content?: string } }[] | undefined)?.[0]?.message?.content ?? "");
     }
-    if (!text) throw new Error("Respuesta vacía del modelo");
+    if (!text) throw new Error(`Respuesta vacía del modelo «${model}»`);
     return text;
   } finally {
     clearTimeout(timer);
@@ -140,12 +148,20 @@ export async function chat(ctx: LlmContext, opts: FetchOptions): Promise<LlmResu
     return { ok: false, error: "IA desactivada: falta la clave API", usedLlm: false };
   }
   let lastError = "";
+  // Modelos de razonamiento: se gastan los tokens pensando y el contenido
+  // final sale vacío. Ante «respuesta vacía» se reintenta con presupuesto
+  // holgado — el tope (max_tokens) solo limita lo máximo, se paga lo que se
+  // genera de verdad, así que subirlo no cuesta nada.
+  let maxTokens = opts.maxTokens;
   for (let attempt = 0; attempt <= RETRIES; attempt++) {
     try {
-      const text = await chatOnce(ctx, opts);
+      const text = await chatOnce(ctx, { ...opts, maxTokens });
       return { ok: true, data: text, usedLlm: true };
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
+      if (/Respuesta vac[ií]a/i.test(lastError) && (maxTokens ?? 1024) < 4096) {
+        maxTokens = 4096;
+      }
       if (opts.signal?.aborted) break;
       if (attempt < RETRIES) {
         const wait = BACKOFF_MS * 2 ** attempt;
@@ -175,6 +191,10 @@ export function friendlyLlmError(raw: string): string {
     if (s === "400" || s === "422") return `el proveedor rechazó la petición — revisa el modelo en Ajustes [${s}]`;
     if (s.startsWith("5")) return `el proveedor está caído (${s}) — prueba en unos minutos`;
     return `el proveedor respondió ${s}`;
+  }
+  const empty = /Respuesta vac[ií]a del modelo «([^»]+)»/.exec(raw);
+  if (empty) {
+    return `el modelo «${empty[1]}» devolvió una respuesta vacía — si sigue así, prueba con otro modelo en Ajustes`;
   }
   if (/Respuesta vac[ií]a/i.test(raw)) {
     return "el modelo devolvió una respuesta vacía — prueba con otro modelo en Ajustes";
