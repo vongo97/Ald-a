@@ -6,21 +6,29 @@ import { priorityScore } from "@/domain/priority";
 import type { Task } from "@/domain/types";
 
 /**
- * Día en órbita — la pieza de Cronodisco.
+ * Día en órbita — Cronodisco (v2, rediseñada contra el mockup).
  *
  * «La lista desaparece: tu día es un reloj astronómico.» Cada tarea con
- * hora es un arco sobre las 24 h del anillo, con su etiqueta fuera del
- * círculo; la aguja marca la hora real (—needle-rot, la interpola la
- * transición de cd-needle) y las marcas giran lenta (cd-ticks = un día).
+ * hora es un arco sobre las 24 h del anillo; la etiqueta cae fuera del
+ * círculo junto al punto medio del arco (la misma idea que el
+ * `centroid()` de d3-shape/arc) y la aguja marca la hora real vía
+ * `--needle-rot`.
  *
- * Tocar un arco (o su etiqueta) completa la tarea. Las tareas SIN hora
- * no caben en el reloj: se quedan en la lista «Sin hora» de TodayView,
- * así que nada se pierde.
+ * Investigación aplicada (d3-shape/arc):
+ *  - `padAngle` → PAD_GRADOS: los arcos contiguos se separan un poco.
+ *  - El `stroke-linecap: round` sobresale strokeWidth/2 por extremo,
+ *    así que el arco se encoge esa cantidad (capFor) por cada lado:
+ *    lo pintado es exactamente la duración de la tarea.
+ *  - Etiquetas a mitad de ángulo, ancladas hacia fuera según el lado.
  *
- * El viewBox (-92 -34 410 306) sigue teniendo el centro en 115,115:
- * coincide con los transform-origin del CSS (cd-ticks / cd-needle).
- * Los arcos se apilan en carriles (92 → 59 px) cuando los horarios se
- * solapan, y la etiqueta alterna radio para no pisarse.
+ * Geometría: viewBox cuadrado -35 -20 300 270 con el centro en 115,115
+ * (coincide con los `transform-origin` de cd-ticks / cd-needle del CSS).
+ * TodayView lo monta dentro de un bloque `aspect-square` con el título
+ * dentro, arriba a la izquierda; el svg va `absolute inset-0` con
+ * `overflow: visible` para que las etiquetas nunca se recorten.
+ *
+ * Tocar un arco (o su etiqueta) completa la tarea. Las tareas sin hora
+ * no caben en el reloj: se quedan en la lista «Sin hora».
  */
 
 interface Props {
@@ -30,10 +38,14 @@ interface Props {
 
 const CX = 115;
 const CY = 115;
-const R_ARCO = 92;
-const CARRILES = [92, 81, 70, 59];
-const R_LABEL = 104;
+const R_ARCO = 72;
+/** Carriles para horarios solapados (del anillo hacia dentro). */
+const CARRILES = [72, 61, 50, 39];
+const R_LABEL = 84;
 const TRUNC = 13;
+const SW_ARCO = 10;
+/** Separación entre arcos contiguos, en grados (el «padAngle»). */
+const PAD_GRADOS = 2.5;
 
 /** Paleta de arcos: ámbar del tema, teal, oro y coral. */
 const COLORES = ["var(--accent)", "#5fa8a0", "#d9b45a", "var(--accent-2)"];
@@ -58,10 +70,26 @@ function tramo(t: Task): [number, number] {
   return [Math.max(0, c - 15), Math.min(1439, c + 15)];
 }
 
+/**
+ * Arco del reloj. Compensa lo que la punta redondeada añade por extremo
+ * y separa a los vecinos con PAD_GRADOS: lo que se ve representa la
+ * duración real. Los tramos minúsculos salen como punto redondeado.
+ */
 function arcoPath(r: number, m1: number, m2: number): string {
-  const p1 = polar(r, degOf(m1));
-  const p2 = polar(r, degOf(m2));
-  const large = degOf(m2) - degOf(m1) > 180 ? 1 : 0;
+  const cap = ((SW_ARCO / 2 / r) * 180) / Math.PI;
+  const margen = cap + PAD_GRADOS / 2;
+  const d1 = degOf(m1);
+  const d2 = degOf(m2);
+  let a = d1 + margen;
+  let b = d2 - margen;
+  if (b - a < 0.6) {
+    const mid = (d1 + d2) / 2;
+    a = mid - 0.3;
+    b = mid + 0.3;
+  }
+  const p1 = polar(r, a);
+  const p2 = polar(r, b);
+  const large = b - a > 180 ? 1 : 0;
   return `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
 }
 
@@ -97,18 +125,31 @@ export default function DayOrbit({ tasks, today }: Props) {
 
   return (
     <svg
-      viewBox="-92 -34 410 306"
-      className="day-orbit mx-auto mb-4 w-full max-w-lg"
+      viewBox="-35 -20 300 270"
+      className="day-orbit absolute inset-0 h-full w-full"
+      style={{ overflow: "visible" }}
       data-testid="day-orbit"
       role="img"
-      aria-label={`Reloj de 24 horas con ${pintados.length} tareas con hora`}
+      aria-label={`Reloj de 24 horas del ${today} con ${pintados.length} tareas con hora`}
     >
+      {/* Anillo interior punteado: la textura del mockup */}
+      <circle
+        cx={CX}
+        cy={CY}
+        r={44}
+        fill="none"
+        stroke="var(--border)"
+        strokeWidth={1}
+        strokeDasharray="1 5"
+        opacity={0.7}
+      />
+
       {/* Anillo de marcas: una vuelta = un día */}
       <g className="cd-ticks" stroke="var(--text-2)">
         {Array.from({ length: 24 }, (_, i) => {
           const major = i % 6 === 0;
-          const p1 = polar(major ? 93 : 97, i * 15);
-          const p2 = polar(104, i * 15);
+          const p1 = polar(75, i * 15);
+          const p2 = polar(major ? 84 : 80, i * 15);
           return (
             <line
               key={i}
@@ -116,9 +157,9 @@ export default function DayOrbit({ tasks, today }: Props) {
               y1={p1.y}
               x2={p2.x}
               y2={p2.y}
-              strokeWidth={major ? 2 : 1}
+              strokeWidth={major ? 1.6 : 0.8}
               strokeLinecap="round"
-              opacity={major ? 0.9 : 0.45}
+              opacity={major ? 0.7 : 0.35}
             />
           );
         })}
@@ -132,12 +173,14 @@ export default function DayOrbit({ tasks, today }: Props) {
         const r = CARRILES[lane];
         const mid = (m1 + m2) / 2;
         const ang = degOf(mid);
-        const rLabel = R_LABEL + (lane % 2) * 16;
+        const cos = Math.cos(((ang - 90) * Math.PI) / 180);
+        // Radio de etiqueta: carriles alternos se separan en diagonal,
+        // pero no en horizontal (ahí sobra el sitio y evitamos desbordes).
+        const rLabel = R_LABEL + (lane % 2) * 13 * (1 - Math.abs(cos));
         const lp = polar(rLabel, ang);
-        const anchor = Math.cos(((ang - 90) * Math.PI) / 180) >= 0 ? "start" : "end";
+        const anchor = cos >= 0 ? "start" : "end";
         const score = priorityScore(t).score;
-        const titulo =
-          t.title.length > TRUNC ? `${t.title.slice(0, TRUNC - 1)}…` : t.title;
+        const titulo = t.title.length > TRUNC ? `${t.title.slice(0, TRUNC - 1)}…` : t.title;
         return (
           <g
             key={t.id}
@@ -158,16 +201,16 @@ export default function DayOrbit({ tasks, today }: Props) {
               d={arcoPath(r, m1, m2)}
               fill="none"
               stroke={color}
-              strokeWidth={8}
+              strokeWidth={SW_ARCO}
               strokeLinecap="round"
-              style={{ animationDelay: `${(i % 3)}s` }}
+              style={{ animationDelay: `${i % 3}s` }}
             />
             {/* Zona de toque generosa (el arco fino es difícil de pillar) */}
             <path
               d={arcoPath(r, m1, m2)}
               fill="none"
               stroke="transparent"
-              strokeWidth={22}
+              strokeWidth={24}
               strokeLinecap="round"
               pointerEvents="stroke"
             />
@@ -176,10 +219,10 @@ export default function DayOrbit({ tasks, today }: Props) {
               y={lp.y}
               textAnchor={anchor}
               dominantBaseline="middle"
-              fontSize={11}
+              fontSize={9}
               fill="var(--text)"
             >
-              {titulo} <tspan fill="var(--text-2)" fontSize={9.5}>★{score}</tspan>
+              {titulo} <tspan fill="var(--text-2)" fontSize={8}>★{score}</tspan>
             </text>
           </g>
         );
@@ -194,24 +237,17 @@ export default function DayOrbit({ tasks, today }: Props) {
           x1={CX}
           y1={CY}
           x2={CX}
-          y2={CY - 76}
+          y2={CY - 62}
           stroke="var(--text)"
-          strokeWidth={2}
+          strokeWidth={1.6}
           strokeLinecap="round"
         />
-        <circle cx={CX} cy={CY - 76} r={3.5} fill="var(--text)" />
+        <circle cx={CX} cy={CY - 62} r={3} fill="var(--text)" />
       </g>
       <circle cx={CX} cy={CY} r={2.5} fill="var(--text-2)" />
 
       {/* Letrero del anillo */}
-      <text
-        x={CX}
-        y={226}
-        textAnchor="middle"
-        fill="var(--text-2)"
-        fontSize={9}
-        letterSpacing={3}
-      >
+      <text x={CX} y={200} textAnchor="middle" fill="var(--text-2)" fontSize={8.5} letterSpacing={3}>
         24 h
       </text>
     </svg>

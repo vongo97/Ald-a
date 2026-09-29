@@ -62,31 +62,29 @@ export default function TodayView() {
 
   return (
     <section>
-      <header className="mb-3 flex items-baseline justify-between">
-        <div>
-          {esCrono && (
-            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted">
-              {eyebrowDe(today)}
-            </p>
-          )}
-          <h1
-            className={`font-display text-2xl font-semibold${esCrono ? " italic" : ""}`}
-          >
-            {esCrono ? "Tu día en órbita" : "Hoy"}
-          </h1>
-        </div>
-        <div className="flex items-baseline gap-2.5">
-          <span className="text-xs text-muted">
-            {todays.length} tarea{todays.length === 1 ? "" : "s"}
-          </span>
-          <ShareDayButton className="btn-ghost px-2.5 py-1 text-xs" />
-        </div>
-      </header>
-
       {esCrono ? (
         <>
-          {/* El reloj astronómico es el héroe: la lista queda debajo */}
-          <DayOrbit tasks={conHora} today={today} />
+          {/*
+            Póster de Cronodisco: el título y el contador viven DENTRO
+            del bloque cuadrado y el reloj llena el resto, como en el
+            mockup. El svg va primero para que el texto quede encima.
+          */}
+          <div className="relative mx-auto mb-4 aspect-square w-full max-w-xl rounded-3xl bg-[var(--surface)]">
+            <DayOrbit tasks={conHora} today={today} />
+            <div className="pointer-events-none absolute left-4 top-3.5 sm:left-5 sm:top-4">
+              <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted">
+                {eyebrowDe(today)}
+              </p>
+              <h1 className="font-display text-2xl font-semibold italic">Tu día en órbita</h1>
+            </div>
+            <div className="absolute right-4 top-3.5 flex flex-col items-end gap-1 sm:right-5 sm:top-4">
+              <span className="text-xs text-muted">
+                {todays.length} tarea{todays.length === 1 ? "" : "s"}
+              </span>
+              <ShareDayButton className="btn-ghost px-2.5 py-1 text-xs" />
+            </div>
+          </div>
+
           {sinHora.length > 0 ? (
             <div className="mb-4">
               <h2 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
@@ -104,7 +102,18 @@ export default function TodayView() {
           <StreakCard tasks={allTasks} />
         </>
       ) : (
-        <StreakCard tasks={allTasks} />
+        <>
+          <header className="mb-3 flex items-baseline justify-between">
+            <h1 className="font-display text-2xl font-semibold">Hoy</h1>
+            <div className="flex items-baseline gap-2.5">
+              <span className="text-xs text-muted">
+                {todays.length} tarea{todays.length === 1 ? "" : "s"}
+              </span>
+              <ShareDayButton className="btn-ghost px-2.5 py-1 text-xs" />
+            </div>
+          </header>
+          <StreakCard tasks={allTasks} />
+        </>
       )}
 
       {overdue.length > 0 && (
