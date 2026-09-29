@@ -1,6 +1,8 @@
 import type { Task } from "./types";
 import { DAY_FULFILL_RATIO, computeStreaks, leafTasksOfDay } from "./streak";
 import { formatLocalDate, parseISODate } from "./dateutils";
+import { drawSeal, sealDateLabel, sealSpec } from "./seal";
+import { mulberry32, setTracking, withAlpha } from "./paint";
 
 /**
  * Tarjeta «Compartir mi día» (fase visual).
@@ -8,14 +10,18 @@ import { formatLocalDate, parseISODate } from "./dateutils";
  * Genera un PNG 1080×1920 (formato stories/estado) en canvas puro, con los
  * colores y tipografías del tema activo, y lo pasa al compartir nativo del
  * sistema (Web Share API con archivos). Si el dispositivo no lo soporta, se
- * descarga. Todo es local: la imagen no sale del dispositivo hasta que el
- * usuario la comparte.
+ * descarga. El centro de la tarjeta es EL SELLO DEL DÍA: la misma pieza
+ * procedural que se acuña en la celebración (misma semilla = mismo sello).
+ * Todo es local: la imagen no sale del dispositivo hasta que el usuario
+ * la comparte.
  */
 
 /** Títulos que entran en la tarjeta; el resto se resume con «+N más». */
 export const SHARE_TOP_LIMIT = 5;
 
 export interface DaySharePayload {
+  /** ISO «YYYY-MM-DD» — la semilla del sello. */
+  dateISO: string;
   /** Días consecutivos cumplidos que terminan hoy. */
   streak: number;
   best: number;
@@ -41,6 +47,7 @@ export function buildSharePayload(tasks: Task[], todayISO: string): DaySharePayl
   const topTitles = completed.slice(0, SHARE_TOP_LIMIT).map((t) => t.title.trim());
 
   return {
+    dateISO: todayISO,
     streak: current,
     best,
     pct,
@@ -85,15 +92,6 @@ export function currentThemeColors(): ShareTheme {
   };
 }
 
-function withAlpha(hex: string, alpha: number): string {
-  const h = hex.replace("#", "");
-  if (h.length !== 3 && h.length !== 6) return hex;
-  const full = h.length === 3 ? [...h].map((c) => c + c).join("") : h;
-  const n = Number.parseInt(full, 16);
-  if (Number.isNaN(n)) return hex;
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
-}
-
 function fillRoundRect(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -129,17 +127,6 @@ function glow(
   ctx.fillRect(0, 0, W, H);
 }
 
-/** Generador determinista: la decoración sale idéntica en cada render. */
-function mulberry32(seed: number): () => number {
-  let a = seed;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 /** Confeti estático en los márgenes, fuera de la zona de contenido. */
 function drawDecor(ctx: CanvasRenderingContext2D, theme: ShareTheme): void {
   const rnd = mulberry32(42);
@@ -158,13 +145,6 @@ function drawDecor(ctx: CanvasRenderingContext2D, theme: ShareTheme): void {
     fillRoundRect(ctx, -w / 2, -h / 2, w, h, 4);
     ctx.restore();
   }
-}
-
-type SpacedCtx = CanvasRenderingContext2D & { letterSpacing: string };
-
-function setTracking(ctx: CanvasRenderingContext2D, px: number): void {
-  // Sin soporte (Safari antiguo) es una propiedad sin efecto: no rompe.
-  (ctx as SpacedCtx).letterSpacing = `${px}px`;
 }
 
 function center(
@@ -220,20 +200,14 @@ export async function renderShareCard(
   setTracking(ctx, 0);
   center(ctx, payload.dateLabel, 232, `500 42px ${body}`, theme.muted);
 
-  // Racha
-  center(ctx, "🔥", 445, `140px ${body}`, theme.fg);
-  center(ctx, String(payload.streak), 775, `700 300px ${display}`, theme.fg);
-  setTracking(ctx, 8);
-  center(
-    ctx,
-    payload.streak === 1 ? "día seguido" : "días seguidos",
-    850,
-    `600 46px ${body}`,
-    theme.muted,
-  );
-  setTracking(ctx, 0);
+  // El sello del día — misma pieza que la celebración
+  drawSeal(ctx, W / 2, 615, 275, sealSpec(payload.dateISO, payload.streak), theme, {
+    streak: payload.streak,
+    dateShort: sealDateLabel(payload.dateISO),
+  });
+
   if (payload.best > 0) {
-    center(ctx, `mejor racha · ${payload.best}`, 915, `500 36px ${body}`, theme.muted);
+    center(ctx, `mejor racha · ${payload.best}`, 950, `500 36px ${body}`, theme.muted);
   }
 
   // Progreso de hoy
@@ -242,14 +216,14 @@ export async function renderShareCard(
     ctx.textAlign = "left";
     ctx.font = `700 42px ${body}`;
     ctx.fillStyle = theme.muted;
-    ctx.fillText("HOY", M, 1045);
+    ctx.fillText("HOY", M, 1055);
     setTracking(ctx, 0);
     ctx.textAlign = "right";
     ctx.font = `700 58px ${display}`;
     ctx.fillStyle = theme.accent;
-    ctx.fillText(`${payload.pct}%`, W - M, 1045);
+    ctx.fillText(`${payload.pct}%`, W - M, 1055);
 
-    const barY = 1080;
+    const barY = 1090;
     const barH = 46;
     const barW = W - 2 * M;
     ctx.textAlign = "left";
@@ -265,17 +239,17 @@ export async function renderShareCard(
     center(
       ctx,
       `${payload.done} de ${payload.total} tareas · ${fulfilled ? "día cumplido 🎉" : "en camino 💪"}`,
-      1200,
+      1210,
       `500 40px ${body}`,
       theme.muted,
     );
   } else {
-    center(ctx, "☀️ día libre", 1120, `600 54px ${display}`, theme.muted);
+    center(ctx, "☀️ día libre", 1130, `600 54px ${display}`, theme.muted);
   }
 
   // Divisor
   ctx.fillStyle = withAlpha(theme.muted, 0.25);
-  ctx.fillRect(M, 1280, W - 2 * M, 2);
+  ctx.fillRect(M, 1285, W - 2 * M, 2);
 
   // Lo que completaste
   const showTitles =
@@ -286,10 +260,10 @@ export async function renderShareCard(
   if (showTitles.length > 0) {
     ctx.font = `600 46px ${display}`;
     ctx.fillStyle = theme.fg;
-    ctx.fillText("Completaste hoy ✅", M, 1375);
+    ctx.fillText("Completaste hoy ✅", M, 1378);
     const maxW = W - 2 * M - 60;
     showTitles.forEach((title, i) => {
-      const y = 1465 + i * 82;
+      const y = 1468 + i * 82;
       ctx.font = `700 44px ${body}`;
       ctx.fillStyle = theme.accent;
       ctx.fillText("✓", M, y);
@@ -300,12 +274,12 @@ export async function renderShareCard(
     if (hidden > 0) {
       ctx.font = `500 40px ${body}`;
       ctx.fillStyle = theme.muted;
-      ctx.fillText(`+${hidden} más`, M + 60, 1465 + showTitles.length * 82);
+      ctx.fillText(`+${hidden} más`, M + 60, 1468 + showTitles.length * 82);
     }
   } else {
     ctx.font = `600 46px ${display}`;
     ctx.fillStyle = theme.muted;
-    ctx.fillText(payload.total > 0 ? "Aún nada cerrado 💪" : "Día despejado ☀️", M, 1375);
+    ctx.fillText(payload.total > 0 ? "Aún nada cerrado 💪" : "Día despejado ☀️", M, 1378);
   }
 
   // Pie

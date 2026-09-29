@@ -26,7 +26,7 @@ describe("buildSharePayload", () => {
       task({ dueDate: TODAY, status: i < 7 ? "done" : "todo" }),
     );
     const p = buildSharePayload(tasks, TODAY);
-    expect(p).toMatchObject({ streak: 1, best: 1, pct: 70, done: 7, total: 10 });
+    expect(p).toMatchObject({ dateISO: TODAY, streak: 1, best: 1, pct: 70, done: 7, total: 10 });
     expect(p.dateLabel).toContain("29");
   });
 
