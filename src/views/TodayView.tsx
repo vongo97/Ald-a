@@ -7,13 +7,24 @@ import { useOverdue } from "@/store/useOverdue";
 import { useStore } from "@/store/useStore";
 import SortableTaskList from "@/components/SortableTaskList";
 import StreakCard from "@/components/StreakCard";
-import DayRing from "@/components/DayRing";
+import DayOrbit from "@/components/DayOrbit";
 import ShareDayButton from "@/components/ShareDayButton";
 import { toISODate, startOfDay } from "@/domain/dateutils";
+
+/** «DOMINGO · 27 SEP» — antetítulo de las cabeceras temáticas de Hoy. */
+const fmtWeekday = new Intl.DateTimeFormat("es-ES", { weekday: "long" });
+const MESES = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+function eyebrowDe(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${fmtWeekday.format(new Date(y, m - 1, d)).toUpperCase()} · ${d} ${MESES[m - 1]}`;
+}
 
 export default function TodayView() {
   const pushToast = useStore((s) => s.pushToast);
   const setView = useStore((s) => s.setView);
+  const theme = useStore((s) => s.theme);
+  /** Cronodisco ve el día como reloj astronómico en vez de lista. */
+  const esCrono = theme === "cronodisco";
 
   const allTasks = useLiveQuery(() => db.tasks.toArray(), [], []);
   const projects = useLiveQuery(() => db.projects.toArray(), [], []);
@@ -39,12 +50,31 @@ export default function TodayView() {
   // La misma fuente que usa el modal: una sola definición de "vencida".
   const { overdue, proposals, applySuggestions } = useOverdue();
 
+  // Reparto para Cronodisco: lo con hora vive en el reloj, lo demás en
+  // la lista «Sin hora» (nada se pierde al retirar la lista de arriba).
+  const { conHora, sinHora } = useMemo(() => {
+    const conHora = todays.filter((t) => t.timeBlock || t.dueTime);
+    const ids = new Set(conHora.map((t) => t.id));
+    return { conHora, sinHora: todays.filter((t) => !ids.has(t.id)) };
+  }, [todays]);
+
   if (!allTasks || !projects) return null;
 
   return (
     <section>
       <header className="mb-3 flex items-baseline justify-between">
-        <h1 className="font-display text-2xl font-semibold">Hoy</h1>
+        <div>
+          {esCrono && (
+            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted">
+              {eyebrowDe(today)}
+            </p>
+          )}
+          <h1
+            className={`font-display text-2xl font-semibold${esCrono ? " italic" : ""}`}
+          >
+            {esCrono ? "Tu día en órbita" : "Hoy"}
+          </h1>
+        </div>
         <div className="flex items-baseline gap-2.5">
           <span className="text-xs text-muted">
             {todays.length} tarea{todays.length === 1 ? "" : "s"}
@@ -53,10 +83,29 @@ export default function TodayView() {
         </div>
       </header>
 
-      <StreakCard tasks={allTasks} />
-
-      {/* Reloj de 24 h de Cronodisco (oculto en el resto de temas) */}
-      <DayRing tasks={allTasks} today={today} />
+      {esCrono ? (
+        <>
+          {/* El reloj astronómico es el héroe: la lista queda debajo */}
+          <DayOrbit tasks={conHora} today={today} />
+          {sinHora.length > 0 ? (
+            <div className="mb-4">
+              <h2 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+                Sin hora
+              </h2>
+              <SortableTaskList tasks={sinHora} showScore />
+            </div>
+          ) : (
+            todays.length > 0 && (
+              <p className="mb-4 text-xs text-muted">
+                🕒 Todo lo de hoy ya tiene su hora en el reloj.
+              </p>
+            )
+          )}
+          <StreakCard tasks={allTasks} />
+        </>
+      ) : (
+        <StreakCard tasks={allTasks} />
+      )}
 
       {overdue.length > 0 && (
         <div className="card mb-4 border-amber-500/40 light:border-amber-300 bg-amber-500/10 light:bg-amber-50 p-3">
@@ -114,7 +163,7 @@ export default function TodayView() {
           hint="Pulsa / (o el botón +) y escribe «Llamar a mamá hoy a las 18:00» para crear tu primera tarea de hoy."
         />
       ) : (
-        <SortableTaskList tasks={todays} showScore />
+        !esCrono && <SortableTaskList tasks={todays} showScore />
       )}
     </section>
   );
