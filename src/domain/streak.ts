@@ -139,6 +139,21 @@ export function computeStreaks(tasks: Task[], todayISO: string): Streaks {
   return { current, best: Math.max(best, current), today };
 }
 
+/**
+ * Tareas HOJA atribuibles a `date` (fecha propia o heredada del padre).
+ * Es la misma regla que usa `statFor`, expuesta para la tarjeta de compartir.
+ */
+export function leafTasksOfDay(tasks: Task[], date: string): Task[] {
+  const index = buildIndex(tasks);
+  const out: Task[] = [];
+  for (const t of index.byId.values()) {
+    if (index.parents.has(t.id)) continue;
+    if (effectiveDate(t, index.byId) !== date) continue;
+    out.push(t);
+  }
+  return out;
+}
+
 const DOT_LABELS = ["d", "l", "m", "x", "j", "v", "s"]; // x = miércoles
 
 /** Puntos de la semana actual (lunes → domingo) — vive en el perfil. */

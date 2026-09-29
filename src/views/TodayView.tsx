@@ -7,6 +7,7 @@ import { useOverdue } from "@/store/useOverdue";
 import { useStore } from "@/store/useStore";
 import SortableTaskList from "@/components/SortableTaskList";
 import StreakCard from "@/components/StreakCard";
+import ShareDayButton from "@/components/ShareDayButton";
 import { toISODate, startOfDay } from "@/domain/dateutils";
 
 export default function TodayView() {
@@ -43,9 +44,12 @@ export default function TodayView() {
     <section>
       <header className="mb-3 flex items-baseline justify-between">
         <h1 className="font-display text-2xl font-semibold">Hoy</h1>
-        <span className="text-xs text-muted">
-          {todays.length} tarea{todays.length === 1 ? "" : "s"}
-        </span>
+        <div className="flex items-baseline gap-2.5">
+          <span className="text-xs text-muted">
+            {todays.length} tarea{todays.length === 1 ? "" : "s"}
+          </span>
+          <ShareDayButton className="btn-ghost px-2.5 py-1 text-xs" />
+        </div>
       </header>
 
       <StreakCard tasks={allTasks} />

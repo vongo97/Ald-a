@@ -4,9 +4,10 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/store/db";
 import { computeStreaks } from "@/domain/streak";
 import { celebrationPhrase, dayJustCompleted } from "@/domain/celebration";
+import ShareDayButton from "@/components/ShareDayButton";
 import { startOfDay, toISODate } from "@/domain/dateutils";
 
-const AUTO_CLOSE_MS = 5000;
+const AUTO_CLOSE_MS = 7000;
 
 /**
  * Confetti en canvas puro (sin librerías): explosión radial detrás de la
@@ -158,7 +159,10 @@ export default function DayCelebration() {
               🔥 {current} {current === 1 ? "día seguido" : "días seguidos"}
             </p>
             <p className="mt-3 text-sm italic text-muted">«{phrase}»</p>
-            <p className="mt-4 text-[10px] uppercase tracking-wide text-muted">
+            <ShareDayButton className="btn-primary mt-4 w-full justify-center text-sm">
+              📤 Compartir mi día
+            </ShareDayButton>
+            <p className="mt-3 text-[10px] uppercase tracking-wide text-muted">
               toca para cerrar
             </p>
           </motion.div>
