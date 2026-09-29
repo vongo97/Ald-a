@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useStore } from "@/store/useStore";
 import { applyTheme } from "@/store/theme";
@@ -8,7 +8,6 @@ import CaptureModal from "@/components/CaptureModal";
 import Toasts from "@/components/Toasts";
 import DayCelebration from "@/components/DayCelebration";
 import TodayView from "@/views/TodayView";
-import DayView from "@/views/DayView";
 import CalendarView from "@/views/CalendarView";
 import InboxView from "@/views/InboxView";
 import ProjectsView from "@/views/ProjectsView";
@@ -27,6 +26,8 @@ import { purgeExpiredTrash } from "@/store/purge";
 import { autoBreakdownBlobs } from "@/store/autoBreakdown";
 import { settingsRepo } from "@/store/settings";
 import { toISODate, startOfDay } from "@/domain/dateutils";
+import { useTimeBlockAlerts } from "@/notifications/useTimeBlockAlerts";
+import { startAnimBridge } from "@/anim/bridge";
 import {
   notificationsSupported,
   notifPermission,
@@ -139,6 +140,27 @@ function AppInner() {
     updateBadge(pendingToday ?? 0);
   }, [pendingToday]);
 
+  // Alertas nativas de los bloques de tiempo de hoy.
+  // Vivían en la vista Día (retirada: el Calendario la subsume); aquí
+  // siguen funcionando esté donde estés. Memo para no reprogramar los
+  // timers en cada render de App (el hook depende de la identidad).
+  const todayTasks = useLiveQuery(
+    () => db.tasks.where("dueDate").equals(today).toArray(),
+    [today],
+    [],
+  );
+  const scheduledToday = useMemo(
+    () => (todayTasks ?? []).filter((t) => t.status === "todo" && !t.deletedAt && !!t.timeBlock),
+    [todayTasks],
+  );
+  useTimeBlockAlerts(scheduledToday);
+
+  // Puente de animaciones por tema (ald-a-animations.css): --d escalonado
+  // y pathLength de los trazos de tinta. useLayoutEffect para estampar los
+  // primeros retardos antes del primer paint; el observer cubre las
+  // cards que lleguen al navegar.
+  useLayoutEffect(() => startAnimBridge(), []);
+
   // Mostrar banner de permiso de notificaciones
   useEffect(() => {
     if (
@@ -178,8 +200,26 @@ function AppInner() {
     <div className="mx-auto flex h-full max-w-3xl flex-col">
       {/* Header mínimo con marca (el dock reemplaza a la nav horizontal) */}
       <header className="glass sticky top-0 z-30 flex items-center justify-between px-4 py-2.5">
-        <span className="font-display text-lg font-semibold tracking-tight text-[var(--accent)]">
+        <span className="brand relative font-display text-lg font-semibold tracking-tight text-[var(--accent)]">
           Mis Tareas
+          {/* Pincelada de tinta: solo la muestra Tinta viva
+              (visibilidad en ald-a-animations.css; pathLength lo asegura
+              el puente, y aquí ya va de serie). */}
+          <svg
+            className="ink-stroke pointer-events-none absolute -bottom-1.5 left-0 h-1.5 w-full"
+            viewBox="0 0 120 8"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M2 5.5 C 30 1.5, 66 7, 118 3"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              pathLength={100}
+            />
+          </svg>
         </span>
         <span className="text-xs text-[var(--fg)] opacity-50">
           {pendingToday ?? 0} pendiente{(pendingToday ?? 0) === 1 ? "" : "s"}
@@ -223,7 +263,6 @@ function AppInner() {
             transition={{ duration: 0.2, ease: "easeOut" }}
           >
             {view === "hoy" && <TodayView />}
-            {view === "dia" && <DayView />}
             {view === "calendario" && <CalendarView />}
             {view === "bandeja" && <InboxView />}
             {view === "proyectos" && <ProjectsView />}

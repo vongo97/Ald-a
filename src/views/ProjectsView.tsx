@@ -126,7 +126,7 @@ export default function ProjectsView() {
           {(tasksByProject.get(selected.id) ?? []).length === 0 ? (
             <p className="py-2 text-xs text-muted">No hay tareas en este proyecto.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="task-list space-y-2">
               {sortBySuggested(tasksByProject.get(selected.id) ?? []).map((t) => (
                 <li key={t.id}>
                   <TaskItem task={t} showScore />

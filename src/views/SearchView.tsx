@@ -39,7 +39,7 @@ export default function SearchView() {
       ) : results.length === 0 ? (
         <EmptyState icon="🤷" title="Sin resultados" hint={`Nada coincide con «${query}».`} />
       ) : (
-        <ul className="space-y-2">
+        <ul className="task-list space-y-2">
           {results.map((t) => (
             <li key={t.id}>
               <TaskItem task={t} />

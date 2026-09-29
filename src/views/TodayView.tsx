@@ -7,6 +7,7 @@ import { useOverdue } from "@/store/useOverdue";
 import { useStore } from "@/store/useStore";
 import SortableTaskList from "@/components/SortableTaskList";
 import StreakCard from "@/components/StreakCard";
+import DayRing from "@/components/DayRing";
 import ShareDayButton from "@/components/ShareDayButton";
 import { toISODate, startOfDay } from "@/domain/dateutils";
 
@@ -53,6 +54,9 @@ export default function TodayView() {
       </header>
 
       <StreakCard tasks={allTasks} />
+
+      {/* Reloj de 24 h de Cronodisco (oculto en el resto de temas) */}
+      <DayRing tasks={allTasks} today={today} />
 
       {overdue.length > 0 && (
         <div className="card mb-4 border-amber-500/40 light:border-amber-300 bg-amber-500/10 light:bg-amber-50 p-3">

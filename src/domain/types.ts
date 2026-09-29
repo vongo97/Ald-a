@@ -53,7 +53,6 @@ export interface Settings {
 
 export type ViewId =
   | "hoy"
-  | "dia"
   | "calendario"
   | "bandeja"
   | "proyectos"

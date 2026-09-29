@@ -57,7 +57,7 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
   };
 
   return (
-    <div className={`card px-3 py-2 ${done ? "opacity-50" : ""}`}>
+    <div className={`card task-card px-3 py-2 ${done ? "opacity-50 done" : ""}`}>
       <div className="flex items-start gap-2">
         <button
           type="button"

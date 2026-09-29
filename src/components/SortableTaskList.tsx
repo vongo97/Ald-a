@@ -87,7 +87,7 @@ export default function SortableTaskList({
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-        <div className="space-y-2">
+        <div className="task-list space-y-2">
           {tasks.map((t) => (
             <SortableItem key={t.id} task={t} showScore={showScore} />
           ))}

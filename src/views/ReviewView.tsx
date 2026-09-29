@@ -76,7 +76,7 @@ export default function ReviewView() {
       {data.overdue.length > 0 && (
         <>
           <h2 className="mb-2 mt-5 text-sm font-semibold text-muted">Vencidas</h2>
-          <ul className="space-y-2">
+          <ul className="task-list space-y-2">
             {data.overdue.map((t) => (
               <li key={t.id}>
                 <TaskItem task={t} />
@@ -89,7 +89,7 @@ export default function ReviewView() {
       {data.noDate.length > 0 && (
         <>
           <h2 className="mb-2 mt-5 text-sm font-semibold text-muted">Sin fecha</h2>
-          <ul className="space-y-2">
+          <ul className="task-list space-y-2">
             {data.noDate.map((t) => (
               <li key={t.id}>
                 <TaskItem task={t} />

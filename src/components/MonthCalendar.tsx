@@ -153,7 +153,10 @@ export default function MonthCalendar({
               >
                 <span className={st?.fulfilled ? "font-semibold" : ""}>{dayNum}</span>
                 {st?.fulfilled && (
-                  <span className="absolute bottom-0.5 right-1 text-[9px] leading-none" aria-hidden>
+                  <span
+                    className="badge seal absolute bottom-0.5 right-1 text-[9px] leading-none"
+                    aria-hidden
+                  >
                     ✓
                   </span>
                 )}

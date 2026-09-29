@@ -2,6 +2,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
+// Después de index.css a propósito: en empates de especificidad gana el
+// fichero de animaciones (las reglas por tema mandan sobre las base).
+import "./styles/ald-a-animations.css";
 import { settingsRepo } from "./store/settings";
 import { seedIfEmpty } from "./store/db";
 

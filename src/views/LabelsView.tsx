@@ -121,7 +121,7 @@ export default function LabelsView() {
       {selected && (
         <div className="mt-4">
           <h2 className="mb-2 text-sm font-semibold text-muted">Tareas con @{selected}</h2>
-          <ul className="space-y-2">
+          <ul className="task-list space-y-2">
             {filtered.map((t) => (
               <li key={t.id}>
                 <TaskItem task={t} />

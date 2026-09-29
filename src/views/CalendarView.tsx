@@ -4,6 +4,7 @@ import { db } from "@/store/db";
 import MonthCalendar from "@/components/MonthCalendar";
 import type { DayGlance } from "@/components/MonthCalendar";
 import TaskItem from "@/components/TaskItem";
+import DayPlanModal from "@/components/DayPlanModal";
 import { dayStat, computeStreaks } from "@/domain/streak";
 import { monthGrid } from "@/domain/calendar";
 import { sortBySuggested } from "@/domain/priority";
@@ -20,6 +21,7 @@ export default function CalendarView() {
   const today = toISODate(startOfDay(new Date()));
 
   const [selected, setSelected] = useState(today);
+  const [planOpen, setPlanOpen] = useState(false);
   const [month, setMonth] = useState(() => {
     const d = startOfDay(new Date());
     return { year: d.getFullYear(), monthIndex: d.getMonth() };
@@ -90,11 +92,23 @@ export default function CalendarView() {
 
   return (
     <section>
-      <header className="mb-3">
-        <h1 className="font-display text-2xl font-semibold">Calendario</h1>
-        <p className="text-xs text-muted">
-          Tu mes de un vistazo: el color es el % de cada día. Toca uno para verlo.
-        </p>
+      <header className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h1 className="font-display text-2xl font-semibold">Calendario</h1>
+          <p className="text-xs text-muted">
+            Tu mes de un vistazo: el color es el % de cada día. Toca uno para verlo.
+          </p>
+        </div>
+        {/* El planificador vivía en la vista Día (retirada): su botón se
+            muda aquí, junto a los días. */}
+        <button
+          type="button"
+          onClick={() => setPlanOpen(true)}
+          className="btn-primary text-xs"
+          title="Describe tu día en lenguaje natural y la IA propondrá horarios"
+        >
+          ✨ Planificar día (IA)
+        </button>
       </header>
 
       <MonthCalendar
@@ -137,12 +151,16 @@ export default function CalendarView() {
           <p className="mb-3 text-sm text-muted">Sin tareas con fecha en este día.</p>
         )}
 
+        {/* Regla divisoria: Editorial la dibuja, Gabinete le cruza un
+            brillo de latón (ver ald-a-animations.css). */}
+        <div className="rule mb-3 h-px bg-[var(--border)]" aria-hidden="true" />
+
         {pending.length > 0 && (
           <>
             <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
               Pendientes
             </h3>
-            <ul className="mb-3 space-y-1.5">
+            <ul className="task-list mb-3 space-y-1.5">
               {pending.map((t) => (
                 <li key={t.id}>
                   <TaskItem task={t} />
@@ -157,7 +175,7 @@ export default function CalendarView() {
             <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
               Completadas
             </h3>
-            <ul className="space-y-1.5">
+            <ul className="task-list space-y-1.5">
               {done.map((t) => (
                 <li key={t.id}>
                   <TaskItem task={t} />
@@ -173,6 +191,8 @@ export default function CalendarView() {
           </p>
         )}
       </div>
+
+      <DayPlanModal open={planOpen} onClose={() => setPlanOpen(false)} />
     </section>
   );
 }

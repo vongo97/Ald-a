@@ -1,0 +1,472 @@
+/* ============================================================
+   ALD-A · Animaciones por tema (v1) — integrado en la app React
+   Cada bloque SOLO se activa con su data-theme correspondiente.
+
+   Origen: ald-a-animations.css (entregado por el usuario). Diferencias
+   con el original, todas marcadas con «ADAPTACIÓN», son correcciones de
+   integración con nuestro markup/React:
+   · .cd-needle deja de girar en bucle de 60 s (demo): la posición de la
+     hora real la pone DayRing.tsx vía --needle-rot.
+   · Los hover de task-card en editorial/warm-tech llevan !important:
+     la animación de entrada con `forwards` tiene más prioridad que una
+     declaración normal y anulaba el lift del hover.
+   · gb-pin pasa a `both` (con `forwards` solo el alfiler de Gabinete
+     parpadeaba visible durante su retardo de 0.45 s).
+   · El .done de Partitura fija opacidad propia: sin ella, pisar la
+     animación de entrada dejaba la completada en opacity:0 (invisible).
+   · button:hover de warm-tech excluye .dock-item para no robarle la
+     magnificación del dock.
+   · Reglas de visibilidad: .day-ring solo en Cronodisco y .ink-stroke
+     solo en Tinta viva (en el resto no se muestran).
+
+   El puente (ald-a-animations.js original) vive en src/anim/bridge.ts:
+   asigna --d escalonado y pathLength="100" a los trazos de tinta.
+
+   Contenido:
+     0. Base compartida (entrada escalonada, reduced motion)
+     A. editorial-calido  — tinta que asienta, grano que respira
+     B. warm-tech         — aurora a la deriva + glow cálido
+     C. digital-craft     — piezas que se "asientan" como papel
+     1. cronodisco        — aguja en hora real, arcos que laten
+     2. gabinete          — alfiler que cae, ficha que se fija
+     3. partitura         — notas que caen al pentagrama
+     4. tinta-viva        — pincelada que se dibuja + sello que estampa
+   ============================================================ */
+
+
+/* ============================================================
+   0 · BASE — entrada escalonada reutilizable en todos los temas
+   ============================================================ */
+.anim-in {
+  opacity: 0;
+  transform: translateY(14px);
+  animation: rise .55s cubic-bezier(.22,.9,.3,1) forwards;
+  animation-delay: calc(var(--d, 0) * 90ms);
+}
+@keyframes rise {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Respeto por usuarios con movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+
+/* ============================================================
+   A · EDITORIAL CÁLIDO
+   Sensación: página que se abre, tinta que se asienta.
+   ============================================================ */
+[data-theme="editorial-calido"] .task-card {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: ed-settle .6s ease-out forwards;
+  animation-delay: calc(var(--d, 0) * 100ms);
+}
+@keyframes ed-settle {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Grano de papel que "respira" muy sutilmente */
+[data-theme="editorial-calido"] body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  opacity: .5; mix-blend-mode: multiply;
+  background-image: inherit; /* hereda el grano definido en index.css */
+  animation: ed-grain 9s ease-in-out infinite alternate;
+}
+@keyframes ed-grain {
+  from { opacity: .35; }
+  to   { opacity: .6; }
+}
+
+/* Título serif: aparece con un leve asentamiento de tinta */
+[data-theme="editorial-calido"] h1 {
+  animation: ed-ink 1.1s ease-out both;
+}
+@keyframes ed-ink {
+  from { opacity: 0; letter-spacing: .06em; filter: blur(2px); }
+  to   { opacity: 1; letter-spacing: 0;    filter: blur(0); }
+}
+
+/* Regla horizontal que se dibuja de izquierda a derecha */
+[data-theme="editorial-calido"] hr,
+[data-theme="editorial-calido"] .rule {
+  transform-origin: left center;
+  animation: ed-rule .9s .3s cubic-bezier(.6,0,.2,1) both;
+}
+@keyframes ed-rule {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* Card: al pasar el cursor la sombra ámbar se acentúa (libro que levanta) */
+[data-theme="editorial-calido"] .task-card {
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+/* ADAPTACIÓN: !important — el forwards de ed-settle ganaba al hover normal */
+[data-theme="editorial-calido"] .task-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 5px 6px 0 rgba(214,140,60,.4);
+}
+
+
+/* ============================================================
+   B · WARM TECH ORGÁNICO
+   Sensación: aurora lenta y viva; lo interactivo brilla cálido.
+   (Los blobs base viven en index.css como body::before/::after)
+   ============================================================ */
+
+/* Deriva orgánica de las dos masas de color */
+[data-theme="warm-tech"] body::before { animation: wt-drift-a 12s ease-in-out infinite alternate; }
+[data-theme="warm-tech"] body::after  { animation: wt-drift-b 15s ease-in-out infinite alternate-reverse; }
+@keyframes wt-drift-a {
+  from { transform: translate(0,0) scale(1); }
+  to   { transform: translate(5vw,4vh) scale(1.18); }
+}
+@keyframes wt-drift-b {
+  from { transform: translate(0,0) scale(1); }
+  to   { transform: translate(-4vw,-5vh) scale(1.22); }
+}
+
+/* Latido muy suave del fondo: la aurora "respira" */
+[data-theme="warm-tech"] body {
+  animation: wt-breathe 10s ease-in-out infinite;
+}
+@keyframes wt-breathe {
+  0%, 100% { background-color: #1a1512; }
+  50%      { background-color: #1e1813; }
+}
+
+/* Entrada de cards: emergen de la penumbra con glow */
+[data-theme="warm-tech"] .task-card {
+  opacity: 0; transform: translateY(12px) scale(.98);
+  animation: wt-emerge .6s cubic-bezier(.2,.8,.3,1) forwards;
+  animation-delay: calc(var(--d, 0) * 100ms);
+}
+@keyframes wt-emerge {
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Glow cálido en interactivos: borde iluminado + halo */
+[data-theme="warm-tech"] .task-card,
+[data-theme="warm-tech"] button:not(.dock-item),
+[data-theme="warm-tech"] a.btn {
+  transition: box-shadow .3s ease, border-color .3s ease, transform .3s ease;
+}
+/* ADAPTACIÓN: !important (forwards de wt-emerge ganaba) y :not(.dock-item)
+   para no robarle al dock su magnificación (translate + scale 1.25). */
+[data-theme="warm-tech"] .task-card:hover,
+[data-theme="warm-tech"] button:not(.dock-item):hover,
+[data-theme="warm-tech"] a.btn:hover {
+  border-color: rgba(217,164,65,.45);
+  box-shadow: 0 0 22px rgba(217,164,65,.25), 0 4px 18px rgba(193,80,46,.35);
+  transform: translateY(-2px);
+}
+[data-theme="warm-tech"] .task-card:hover {
+  transform: translateY(-2px) !important;
+}
+
+/* Botón principal: pulso de brasa */
+[data-theme="warm-tech"] .btn-primary {
+  animation: wt-glow-pulse 3.2s ease-in-out infinite;
+}
+@keyframes wt-glow-pulse {
+  0%, 100% { box-shadow: 0 4px 18px rgba(193,80,46,.45); }
+  50%      { box-shadow: 0 4px 30px rgba(217,164,65,.6); }
+}
+
+
+/* ============================================================
+   C · DIGITAL CRAFT
+   Sensación: objetos físicos que se sueltan sobre la mesa.
+   ============================================================ */
+
+/* Cada card "cae" y se asienta con su micro-rotación */
+[data-theme="digital-craft"] .task-card {
+  opacity: 0;
+  transform: translateY(-14px) rotate(-3deg) scale(.96);
+  animation: dc-drop .55s cubic-bezier(.34,1.56,.64,1) forwards;
+  animation-delay: calc(var(--d, 0) * 110ms);
+}
+@keyframes dc-drop {
+  0%   { opacity: 0; transform: translateY(-14px) rotate(-3deg) scale(.96); }
+  60%  { opacity: 1; transform: translateY(2px)  rotate(.4deg) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0)    rotate(var(--rot,-.6deg)) scale(1); }
+}
+
+/* Al hover, la pieza se levanta como papel agarrado */
+[data-theme="digital-craft"] .task-card {
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+[data-theme="digital-craft"] .task-card:hover {
+  transform: rotate(0deg) translateY(-4px) scale(1.02) !important;
+  box-shadow: 4px 8px 0 rgba(58,80,107,.28);
+}
+
+/* Sello/badge: se "estampa" al aparecer (golpe de tinta) */
+[data-theme="digital-craft"] .badge {
+  opacity: 0; transform: scale(2.2) rotate(-10deg);
+  animation: dc-stamp .45s .35s cubic-bezier(.2,1.4,.4,1) forwards;
+}
+@keyframes dc-stamp {
+  0%   { opacity: 0; transform: scale(2.2) rotate(-10deg); }
+  60%  { opacity: 1; transform: scale(.92) rotate(-1deg); }
+  100% { opacity: 1; transform: scale(1)   rotate(-2deg); }
+}
+
+/* Monograma de marca: asentamiento inicial */
+[data-theme="digital-craft"] .brand {
+  animation: dc-brand .7s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes dc-brand {
+  from { opacity: 0; transform: rotate(-14deg) scale(.8); }
+  to   { opacity: 1; transform: rotate(-4deg)  scale(1); }
+}
+
+
+/* ============================================================
+   1 · CRONODISCO
+   Sensación: un instrumento vivo. El tiempo gira y las tareas laten.
+   Las clases .cd-* viven en el SVG de DayRing.tsx.
+   ============================================================ */
+
+/* El reloj del día solo se muestra en este tema */
+.day-ring { display: none; }
+[data-theme="cronodisco"] .day-ring { display: flex; }
+
+/* Anillo exterior de ticks: rotación lenta continua (el día transcurre) */
+[data-theme="cronodisco"] .cd-ticks {
+  transform-origin: 115px 115px;
+  animation: cd-spin 240s linear infinite;   /* 1 vuelta = "un día" */
+}
+@keyframes cd-spin { to { transform: rotate(360deg); } }
+
+/* ADAPTACIÓN: la aguja ya no gira en bucle de 60 s (era una demo que
+   daba vértigo). DayRing pone --needle-rot con la hora real y aquí solo
+   se interpola el movimiento cuando cambia el minuto. */
+[data-theme="cronodisco"] .cd-needle {
+  transform-origin: 115px 115px;
+  transform: rotate(var(--needle-rot, 0deg));
+  transition: transform .6s cubic-bezier(.3,.9,.4,1);
+}
+
+/* Arcos de tarea: laten suavemente como señales */
+[data-theme="cronodisco"] .cd-arc {
+  animation: cd-pulse 3s ease-in-out infinite;
+}
+[data-theme="cronodisco"] .cd-arc:nth-of-type(2) { animation-delay: 1s; }
+[data-theme="cronodisco"] .cd-arc:nth-of-type(3) { animation-delay: 2s; }
+@keyframes cd-pulse {
+  0%, 100% { opacity: .8; stroke-width: 7; }
+  50%      { opacity: 1; stroke-width: 9; }
+}
+
+/* Punto de tarea: "blip" tipo radar al cargar */
+[data-theme="cronodisco"] .cd-dot {
+  transform-box: fill-box; transform-origin: center;
+  animation: cd-blip 2.6s ease-out infinite;
+  animation-delay: calc(var(--d, 0) * 600ms);
+}
+@keyframes cd-blip {
+  0%        { opacity: 1; transform: scale(.4); }
+  70%, 100% { opacity: 0; transform: scale(2.4); }
+}
+
+/* Cards de tarea: entran orbitando levemente */
+[data-theme="cronodisco"] .task-card {
+  opacity: 0; transform: translateX(-10px) rotate(-1deg);
+  animation: cd-in .5s cubic-bezier(.2,.9,.3,1) forwards;
+  animation-delay: calc(var(--d, 0) * 90ms);
+}
+@keyframes cd-in {
+  to { opacity: 1; transform: translateX(0) rotate(0); }
+}
+
+
+/* ============================================================
+   2 · GABINETE
+   Sensación: alguien ficha colecciones en un museo privado.
+   ============================================================ */
+
+/* Ficha: se desliza hacia arriba y se fija en su rotación final */
+[data-theme="gabinete"] .task-card {
+  opacity: 0;
+  transform: translateY(24px) rotate(var(--rot,-.6deg)) scale(.97);
+  animation: gb-mount .6s cubic-bezier(.2,.9,.3,1) forwards;
+  animation-delay: calc(var(--d, 0) * 120ms);
+}
+@keyframes gb-mount {
+  0%   { opacity: 0; transform: translateY(24px) rotate(0deg) scale(.97); }
+  100% { opacity: 1; transform: translateY(0) rotate(var(--rot,-.6deg)) scale(1); }
+}
+
+/* Alfiler: cae desde arriba y pega un pequeño rebote.
+   ADAPTACIÓN: `both` — con `forwards` solo, el alfiler se veía estático
+   durante los .45 s de retardo y luego desaparecía para animar. */
+[data-theme="gabinete"] .task-card::before {
+  opacity: 0;
+  animation: gb-pin .5s .45s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes gb-pin {
+  0%   { opacity: 0; transform: translateY(-18px) scale(1.3); }
+  60%  { opacity: 1; transform: translateY(1px)  scale(.95); }
+  100% { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+/* Al hover: la ficha se inclina hacia ti (levanta la esquina) */
+[data-theme="gabinete"] .task-card {
+  transition: transform .3s ease, box-shadow .3s ease;
+}
+[data-theme="gabinete"] .task-card:hover {
+  transform: rotate(0deg) translateY(-4px) !important;
+  box-shadow: 0 10px 22px rgba(0,0,0,.55);
+}
+
+/* Título del gabinete: fundido lento de lámpara de museo */
+[data-theme="gabinete"] h1 {
+  animation: gb-lamp 1.4s ease-out both;
+}
+@keyframes gb-lamp {
+  from { opacity: 0; text-shadow: 0 0 24px rgba(176,141,87,.9); }
+  to   { opacity: 1; text-shadow: 0 0 0 transparent; }
+}
+
+/* Línea de latón: brillo que cruza una vez */
+[data-theme="gabinete"] hr::after,
+[data-theme="gabinete"] .rule::after {
+  content: ""; display: block; height: 1px;
+  background: linear-gradient(90deg, transparent, #f0d9a8, transparent);
+  animation: gb-shine 2.2s .8s ease-out both;
+}
+@keyframes gb-shine {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+
+/* ============================================================
+   3 · PARTITURA
+   Sensación: la jornada se "ejecuta". Las notas caen a la altura
+   correcta del pentagrama.
+   ============================================================ */
+
+/* Nota/tarea: cae desde arriba y rebota sobre su línea */
+[data-theme="partitura"] .task-card,
+[data-theme="partitura"] .pt-note {
+  opacity: 0;
+  animation: pt-drop .65s cubic-bezier(.34,1.56,.64,1) forwards;
+  animation-delay: calc(var(--d, 0) * 130ms);
+}
+@keyframes pt-drop {
+  0%   { opacity: 0; transform: translateY(-26px); }
+  55%  { opacity: 1; transform: translateY(3px); }
+  75%  { transform: translateY(-2px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Tarea completada: la nota "suena" — pulso con estela.
+   ADAPTACIÓN: fija su propia opacidad. Sin ella, este .done pisaba la
+   animación de entrada (pt-drop) y la card completada se quedaba con el
+   opacity:0 base — invisible al montarse ya completada. */
+[data-theme="partitura"] .task-card.done,
+[data-theme="partitura"] .pt-note.done {
+  opacity: .5;
+  animation: pt-play 1s cubic-bezier(.2,.9,.3,1) both;
+}
+@keyframes pt-play {
+  0%   { transform: scale(1);    filter: none; }
+  30%  { transform: scale(1.15); filter: drop-shadow(0 0 8px rgba(164,68,46,.7)); }
+  100% { transform: scale(1);    filter: drop-shadow(0 0 2px rgba(164,68,46,.3)); }
+}
+
+/* Barra de tempo: se mueve como metrónomo al completar */
+[data-theme="partitura"] .tempo {
+  transform-origin: top center;
+  animation: pt-metronome 1s ease-in-out infinite;
+}
+@keyframes pt-metronome {
+  0%, 100% { transform: rotate(-14deg); }
+  50%      { transform: rotate(14deg); }
+}
+
+/* Título: aparece como título de partitura impreso */
+[data-theme="partitura"] h1 {
+  animation: pt-title 1s ease-out both;
+}
+@keyframes pt-title {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+
+/* ============================================================
+   4 · TINTA VIVA
+   Sensación: caligrafía en tiempo real. Trazo que se dibuja,
+   sello que golpea el papel.
+   ============================================================ */
+
+/* Pincelada de marca: solo en este tema (el resto no la muestra) */
+.ink-stroke { display: none; }
+[data-theme="tinta-viva"] .ink-stroke { display: block; }
+
+/* Pincelada SVG: se dibuja de izquierda a derecha.
+   pathLength="100" lo prepara el puente (anim/bridge.ts). */
+[data-theme="tinta-viva"] .ink-stroke path {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: tn-draw 1.1s cubic-bezier(.5,0,.3,1) forwards;
+  animation-delay: calc(var(--d, 0) * 200ms);
+}
+@keyframes tn-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Sello rojo: golpe de estampa (rápido, con rebote seco) */
+[data-theme="tinta-viva"] .seal {
+  opacity: 0;
+  transform: scale(2.4) rotate(-14deg);
+  animation: tn-stamp .5s cubic-bezier(.2,1.3,.4,1) forwards;
+  animation-delay: calc(var(--d, 0) * 200ms + .55s);
+}
+@keyframes tn-stamp {
+  0%   { opacity: 0; transform: scale(2.4) rotate(-14deg); }
+  55%  { opacity: 1; transform: scale(.9)  rotate(-3deg); }
+  75%  { transform: scale(1.06) rotate(-5deg); }
+  100% { opacity: 1; transform: scale(1)   rotate(-4deg); }
+}
+
+/* Texto de la tarea: se "escribe" fundiéndose */
+[data-theme="tinta-viva"] .task-card,
+[data-theme="tinta-viva"] .tn-text {
+  opacity: 0;
+  animation: tn-ink-in .9s ease-out forwards;
+  animation-delay: calc(var(--d, 0) * 200ms + .3s);
+}
+@keyframes tn-ink-in {
+  from { opacity: 0; filter: blur(3px); transform: translateY(4px); }
+  to   { opacity: 1; filter: blur(0);   transform: translateY(0); }
+}
+
+/* Al hover: la tinta se intensifica un punto */
+[data-theme="tinta-viva"] .task-card {
+  transition: border-image .3s ease, transform .3s ease;
+}
+[data-theme="tinta-viva"] .task-card:hover {
+  transform: translateX(4px) !important;
+}
+
+/* Completar tarea: sello adicional de "hecho" */
+[data-theme="tinta-viva"] .task-card.done::after {
+  content: "完";
+  position: absolute; right: 10px; top: 50%;
+  transform: translateY(-50%) rotate(-8deg);
+  width: 30px; height: 30px;
+  background: var(--accent); color: #f5f2e9;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .85rem; border-radius: 5px;
+  animation: tn-stamp .45s cubic-bezier(.2,1.3,.4,1) both;
+}
