@@ -13,10 +13,11 @@ import { startOfDay, toISODate } from "@/domain/dateutils";
 const AUTO_CLOSE_MS = 9000;
 /** Segundos: el golpe del sello. */
 const T_IMPACT = 1.45;
-/** Segundos: fin de la animación (fotograma final limpio). */
-const T_END = 4.6;
 const PARTICLES = 650;
 const SPARKS = 110;
+/** Rayos de sol del fondo y motas flotando. */
+const RAYS = 20;
+const MOTES = 44;
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
@@ -32,7 +33,14 @@ function easeOutCubic(t: number): number {
  * El polvo de toda la pantalla converge y se ensambla en EL SELLO DEL DÍA
  * (procedural, único por fecha + racha, con los colores del tema): a los
  * 1,45 s el sello golpea con destello, sacudida y vibración, y estalla en
- * chispas. El mismo sello viaja después en la tarjeta de compartir.
+ * chispas. Detrás, el fondo vive: rayos de sol girando, viñeta, motas
+ * flotando y grano de película — todo con la paleta del tema activo. El
+ * mismo sello viaja después en la tarjeta de compartir.
+ *
+ * OJO con el lienzo: `<canvas>` es un elemento REEMPLAZADO — con
+ * `absolute inset-0` no se estira, usa su tamaño intrínseco (los atributos
+ * width/height). Por eso lleva `h-full w-full`: primero la caja real, luego
+ * el bitmap a caja × dpr. Sin eso, todo se pinta a dpr× y desplazado.
  *
  * El trigger sigue siendo de nivel app: funciona desde cualquier vista y
  * solo en la transición false → true (nunca al abrir con el día ya hecho).
@@ -73,7 +81,7 @@ export default function DayCelebration() {
     return () => clearTimeout(t);
   }, [show]);
 
-  // Animación del sello.
+  // Animación del sello + fondo vivo.
   useEffect(() => {
     if (!show) return;
     const canvas = canvasRef.current;
@@ -89,8 +97,9 @@ export default function DayCelebration() {
       if (!ctx) return;
 
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const w = window.innerWidth;
-      const h = window.innerHeight;
+      const box = canvas.getBoundingClientRect();
+      const w = box.width || window.innerWidth;
+      const h = box.height || window.innerHeight;
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
       ctx.scale(dpr, dpr);
@@ -104,6 +113,78 @@ export default function DayCelebration() {
       const spec = sealSpec(todayISO, current);
       const dateShort = sealDateLabel(todayISO);
       const sealOpts = { streak: current, dateShort };
+      const rnd = mulberry32(spec.seed ^ 0x9e3779b9);
+
+      /* ---------------- Fondo vivo (una sola vez) ---------------- */
+
+      // Rayos de sol en un offscreen: solo se giran al pintarlos.
+      const raysBox = document.createElement("canvas");
+      raysBox.width = canvas.width;
+      raysBox.height = canvas.height;
+      const raysCtx = raysBox.getContext("2d");
+      if (raysCtx) {
+        raysCtx.scale(dpr, dpr);
+        const diag = Math.hypot(w, h);
+        const half = ((Math.PI * 2) / RAYS / 2) * 0.6;
+        for (let i = 0; i < RAYS; i++) {
+          const a = (i / RAYS) * Math.PI * 2;
+          const alt = i % 2 === 0;
+          raysCtx.fillStyle = withAlpha(
+            alt ? theme.accent : theme.accent2,
+            alt ? 0.06 : 0.04,
+          );
+          raysCtx.beginPath();
+          raysCtx.moveTo(cx, cy);
+          raysCtx.lineTo(cx + Math.cos(a - half) * diag, cy + Math.sin(a - half) * diag);
+          raysCtx.lineTo(cx + Math.cos(a + half) * diag, cy + Math.sin(a + half) * diag);
+          raysCtx.closePath();
+          raysCtx.fill();
+        }
+      }
+
+      // Viñeta: foco en el centro, bordes en sombra.
+      const vignette = ctx.createRadialGradient(
+        cx,
+        cy,
+        Math.min(w, h) * 0.3,
+        cx,
+        cy,
+        Math.hypot(w, h) * 0.75,
+      );
+      vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+      vignette.addColorStop(1, "rgba(0, 0, 0, 0.24)");
+
+      // Grano de película (papel): semilla fija, misma textura siempre.
+      let grainPattern: CanvasPattern | null = null;
+      const grain = document.createElement("canvas");
+      grain.width = 128;
+      grain.height = 128;
+      const gctx = grain.getContext("2d");
+      if (gctx) {
+        const img = gctx.createImageData(128, 128);
+        const grnd = mulberry32(7);
+        for (let i = 0; i < img.data.length; i += 4) {
+          const claro = grnd() < 0.5;
+          img.data[i] = img.data[i + 1] = img.data[i + 2] = claro ? 255 : 0;
+          img.data[i + 3] = Math.floor(grnd() * 26);
+        }
+        gctx.putImageData(img, 0, 0);
+        grainPattern = ctx.createPattern(grain, "repeat");
+      }
+
+      // Motas: lentas, con balanceo, envuelven en los bordes.
+      const motes = Array.from({ length: MOTES }, () => ({
+        x0: rnd() * w,
+        y0: rnd() * h,
+        r: 1.5 + rnd() * 3.5,
+        speed: 6 + rnd() * 16, // px/s hacia arriba
+        sway: 12 + rnd() * 26,
+        phase: rnd() * Math.PI * 2,
+        alpha: 0.1 + rnd() * 0.25,
+        color: [theme.accent, theme.accent2, "#ffd166"][Math.floor(rnd() * 3)],
+      }));
+
+      /* ---------------- El sello ---------------- */
 
       // El sello en un offscreen: sus píxeles son las dianas del polvo,
       // con el color real de cada trazo.
@@ -129,8 +210,6 @@ export default function DayCelebration() {
           }
         }
       }
-
-      const rnd = mulberry32(spec.seed ^ 0x9e3779b9);
       for (let i = targets.length - 1; i > 0; i--) {
         const j = Math.floor(rnd() * (i + 1));
         const tmp = targets[i];
@@ -180,7 +259,29 @@ export default function DayCelebration() {
       const draw = (t: number) => {
         ctx.clearRect(0, 0, w, h);
 
-        // Sacudida en el impacto
+        /* — Fondo vivo — */
+        if (raysBox) {
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate(t * 0.04);
+          ctx.translate(-cx, -cy);
+          ctx.drawImage(raysBox, 0, 0, w, h);
+          ctx.restore();
+        }
+        ctx.fillStyle = vignette;
+        ctx.fillRect(0, 0, w, h);
+        for (const m of motes) {
+          const x = m.x0 + Math.sin(t * 0.5 + m.phase) * m.sway;
+          const y = (((m.y0 - t * m.speed) % h) + h) % h;
+          ctx.globalAlpha = m.alpha;
+          ctx.fillStyle = m.color;
+          ctx.beginPath();
+          ctx.arc(x, y, m.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        /* — El sello (con la sacudida del golpe) — */
         let shakeX = 0;
         let shakeY = 0;
         if (t >= T_IMPACT && t < T_IMPACT + 0.5) {
@@ -188,7 +289,6 @@ export default function DayCelebration() {
           shakeX = Math.sin((t - T_IMPACT) * 62) * 7 * k;
           shakeY = Math.cos((t - T_IMPACT) * 51) * 5 * k;
         }
-
         ctx.save();
         ctx.translate(shakeX, shakeY);
 
@@ -261,16 +361,22 @@ export default function DayCelebration() {
         }
 
         ctx.restore();
+
+        /* — Grano de película sobre todo — */
+        if (grainPattern) {
+          ctx.globalAlpha = 0.55;
+          ctx.fillStyle = grainPattern;
+          ctx.fillRect(0, 0, w, h);
+          ctx.globalAlpha = 1;
+        }
       };
 
+      // El bucle dura lo que la celebración: el fondo sigue vivo hasta el
+      // cierre (motes y rayos respiran despacio).
       const tick = () => {
         const t = (performance.now() - start) / 1000;
         draw(t);
-        if (t < T_END) {
-          raf = requestAnimationFrame(tick);
-        } else {
-          draw(T_END + 1); // fotograma final: solo el sello, sin polvo
-        }
+        if (!cancelled) raf = requestAnimationFrame(tick);
       };
       raf = requestAnimationFrame(tick);
     };
@@ -321,7 +427,12 @@ export default function DayCelebration() {
             </motion.div>
           </div>
 
-          <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" />
+          {/* h-full w-full es OBLIGATORIO: sin ancho/alto explícitos el
+              canvas usa su tamaño intrínseco y todo sale a dpr× y corrido. */}
+          <canvas
+            ref={canvasRef}
+            className="pointer-events-none absolute inset-0 h-full w-full"
+          />
         </motion.div>
       )}
     </AnimatePresence>

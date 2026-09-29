@@ -166,14 +166,14 @@ export function drawSeal(
   arcText(ctx, "DÍA CUMPLIDO", R * 0.775, -Math.PI / 2, R * 0.1, fontBody, fg, "top");
   arcText(ctx, opts.dateShort, R * 0.775, Math.PI / 2, R * 0.09, fontBody, muted, "bottom");
 
-  // Rayos interiores
+  // Rayos interiores (fuera de la estrella, sin tocar el texto curvo)
   ctx.strokeStyle = withAlpha(accent2, 0.6);
   ctx.lineWidth = Math.max(1, R * 0.013);
   for (let i = 0; i < spec.rays; i++) {
     const a = (i / spec.rays) * Math.PI * 2;
     const len = spec.rayLength[i] ?? 0.8;
-    const r1 = R * 0.55;
-    const r2 = r1 + R * 0.16 * len;
+    const r1 = R * 0.58;
+    const r2 = r1 + R * 0.13 * len;
     ctx.beginPath();
     ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
     ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
@@ -185,7 +185,7 @@ export function drawSeal(
   ctx.beginPath();
   for (let i = 0; i <= pts; i++) {
     const a = (i / pts) * Math.PI * 2 - Math.PI / 2;
-    const r = i % 2 === 0 ? R * 0.56 : R * 0.34;
+    const r = i % 2 === 0 ? R * 0.56 : R * 0.4; // hueco central para número + etiqueta
     const x = Math.cos(a) * r;
     const y = Math.sin(a) * r;
     if (i === 0) ctx.moveTo(x, y);
