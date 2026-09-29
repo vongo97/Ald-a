@@ -46,7 +46,10 @@ function easeOutCubic(t: number): number {
  * solo en la transición false → true (nunca al abrir con el día ya hecho).
  */
 export default function DayCelebration() {
-  const allTasks = useLiveQuery(() => db.tasks.toArray(), [], []);
+  // Sin valor por defecto: `undefined` = la primera consulta aún no ha
+  // llegado. No se puede confundir con «base vacía» (que sí es `[]`), o el
+  // día cumplido se celebraría de nuevo en cada recarga.
+  const allTasks = useLiveQuery(() => db.tasks.toArray());
   const todayISO = useMemo(() => toISODate(startOfDay(new Date())), []);
   const { current, today } = useMemo(
     () => computeStreaks(allTasks ?? [], todayISO),
@@ -62,6 +65,7 @@ export default function DayCelebration() {
 
   const fulfilled = today.total > 0 && today.fulfilled;
   useEffect(() => {
+    if (allTasks === undefined) return; // sin datos aún no hay punto de partida
     if (wasFulfilled.current === null) {
       wasFulfilled.current = fulfilled;
       return;
@@ -72,7 +76,7 @@ export default function DayCelebration() {
 
     setPhrase(celebrationPhrase());
     setShow(true);
-  }, [fulfilled]);
+  }, [fulfilled, allTasks]);
 
   // Cierre automático.
   useEffect(() => {

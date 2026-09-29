@@ -46,9 +46,15 @@ if ("serviceWorker" in navigator) {
 
 // Gancho de depuración SOLO en desarrollo (el bloque se elimina en el build
 // de producción): permite sembrar/inspeccionar datos desde la consola con
-// `__ald.db` para probar flujos como la celebración sin ir a mano.
+// `__ald.db` y generar la tarjeta con `__ald.share` para probar flujos como
+// la celebración o el compartir sin ir a mano.
 if (import.meta.env.DEV) {
+  const w = window as unknown as { __ald?: Record<string, unknown> };
+  w.__ald = {};
   void import("./store/db").then(({ db }) => {
-    (window as unknown as { __ald?: unknown }).__ald = { db };
+    w.__ald!.db = db;
+  });
+  void import("./domain/shareCard").then((share) => {
+    w.__ald!.share = share;
   });
 }

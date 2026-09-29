@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Task } from "@/domain/types";
-import { buildSharePayload, SHARE_TOP_LIMIT } from "../shareCard";
+import { buildSharePayload } from "../shareCard";
 
 let seq = 0;
 function task(over: Partial<Task>): Task {
@@ -18,7 +18,9 @@ function task(over: Partial<Task>): Task {
   };
 }
 
+// Martes: la semana actual va del lunes 28 al domingo 4 de octubre.
 const TODAY = "2026-09-29";
+const LUN = "2026-09-28";
 
 describe("buildSharePayload", () => {
   it("refleja racha, %, contadores y fecha legible", () => {
@@ -28,59 +30,66 @@ describe("buildSharePayload", () => {
     const p = buildSharePayload(tasks, TODAY);
     expect(p).toMatchObject({ dateISO: TODAY, streak: 1, best: 1, pct: 70, done: 7, total: 10 });
     expect(p.dateLabel).toContain("29");
+    expect(p.week).toHaveLength(7);
+    expect(p.week[0].label).toBe("l");
+    expect(p.week[6].label).toBe("d");
   });
 
-  it("topTitles: hojas completadas, sin contenedores ni borradas, orden por prioridad", () => {
+  it("PRIVACIDAD: ningún título de tarea llega a la tarjeta", () => {
+    const tareas = [
+      task({ dueDate: TODAY, status: "done", title: "reunión con la psicóloga" }),
+      task({ dueDate: TODAY, status: "done", title: "comprar regalo de mamá" }),
+      task({ dueDate: TODAY, status: "todo", title: "llamar al banco" }),
+      task({ dueDate: LUN, status: "done", title: "mi experto privado" }),
+    ];
+    const p = buildSharePayload(tareas, TODAY);
+    const json = JSON.stringify(p);
+    for (const t of tareas) expect(json).not.toContain(t.title);
+    // ni siquiera como campos vacíos: la forma ya no existe
+    expect(p).not.toHaveProperty("topTitles");
+    expect(p).not.toHaveProperty("extraTitles");
+  });
+
+  it("la semana resume en cifras: días cumplidos y tareas (lunes → hoy)", () => {
     const tasks = [
-      // Contenedor completado: NO debe listar su título ni contar en total.
-      task({ id: "p1", dueDate: TODAY, status: "done", title: "proyecto" }),
-      task({ id: "h1", parentId: "p1", dueDate: TODAY, status: "done", title: "urgente", priority: 1 }),
-      task({ id: "h2", parentId: "p1", dueDate: TODAY, status: "done", title: "normal", priority: 3 }),
-      task({
-        id: "borrada",
-        dueDate: TODAY,
-        status: "done",
-        title: "invisible",
-        deletedAt: "2026-09-29T00:00:00.000Z",
-      }),
-      task({ id: "pendiente", dueDate: TODAY, status: "todo", title: "no aparece" }),
-      task({ id: "ayer", dueDate: "2026-09-28", status: "done", title: "otro día" }),
+      // lunes incumplido: 1 de 4 → «missed»
+      ...Array.from({ length: 4 }, (_, i) =>
+        task({ dueDate: LUN, status: i === 0 ? "done" : "todo" }),
+      ),
+      // hoy cumplido: 3 de 3 → «done»
+      ...Array.from({ length: 3 }, () => task({ dueDate: TODAY, status: "done" })),
+      // futuro: no suma
+      task({ dueDate: "2026-09-30", status: "done" }),
     ];
     const p = buildSharePayload(tasks, TODAY);
-    // Las borradas sí cuentan en el %, pero no se muestran.
-    expect(p).toMatchObject({ done: 3, total: 4 });
-    expect(p.topTitles).toEqual(["urgente", "normal"]);
-    expect(p.extraTitles).toBe(0);
+    expect(p.week[0]).toMatchObject({ date: LUN, state: "missed" });
+    expect(p.week[1]).toMatchObject({ date: TODAY, state: "done" });
+    expect(p.week[2].state).toBe("future");
+    expect(p.weekFulfilled).toBe(1); // solo hoy (el lunes no se cumplió)
+    expect(p.weekDone).toBe(4); // 1 del lunes + 3 de hoy; el futuro no cuenta
   });
 
-  it("lo que supera el tope se resume en extraTitles", () => {
-    const tasks = Array.from({ length: 7 }, (_, i) =>
-      task({ dueDate: TODAY, status: "done", priority: 3, order: i }),
-    );
-    const p = buildSharePayload(tasks, TODAY);
-    expect(p.topTitles).toHaveLength(SHARE_TOP_LIMIT);
-    expect(p.extraTitles).toBe(2);
-  });
-
-  it("subtarea sin fecha propia: cuenta en el día del padre y su título se lista", () => {
+  it("subtarea sin fecha propia: cuenta en el día del padre y sin título", () => {
     const tasks = [
       task({ id: "padre", dueDate: TODAY, status: "todo" }),
       task({ id: "sub", parentId: "padre", status: "done", title: "subtarea heredada" }),
     ];
     const p = buildSharePayload(tasks, TODAY);
     expect(p.total).toBe(1); // solo la hoja
-    expect(p.topTitles).toContain("subtarea heredada");
+    expect(p.done).toBe(1);
+    expect(JSON.stringify(p)).not.toContain("subtarea heredada");
   });
 
-  it("día sin tareas: pct 0, listas vacías y racha 0", () => {
+  it("día sin tareas: pct 0, racha 0 y semana en cero", () => {
     const p = buildSharePayload([], TODAY);
     expect(p).toMatchObject({
       streak: 0,
       pct: 0,
       done: 0,
       total: 0,
-      topTitles: [],
-      extraTitles: 0,
+      weekFulfilled: 0,
+      weekDone: 0,
     });
+    expect(p.week).toHaveLength(7);
   });
 });

@@ -1,8 +1,10 @@
 import type { Task } from "./types";
-import { DAY_FULFILL_RATIO, computeStreaks, leafTasksOfDay } from "./streak";
+import type { WeekDot } from "./streak";
+import { DAY_FULFILL_RATIO, computeStreaks, dayStat, weekDots } from "./streak";
 import { formatLocalDate, parseISODate } from "./dateutils";
 import { drawSeal, sealDateLabel, sealSpec } from "./seal";
 import { mulberry32, setTracking, withAlpha } from "./paint";
+import { qrMatrix } from "./qr";
 
 /**
  * Tarjeta «Compartir mi día» (fase visual).
@@ -12,12 +14,18 @@ import { mulberry32, setTracking, withAlpha } from "./paint";
  * sistema (Web Share API con archivos). Si el dispositivo no lo soporta, se
  * descarga. El centro de la tarjeta es EL SELLO DEL DÍA: la misma pieza
  * procedural que se acuña en la celebración (misma semilla = mismo sello).
- * Todo es local: la imagen no sale del dispositivo hasta que el usuario
- * la comparte.
+ *
+ * PRIVACIDAD: la tarjeta nunca lleva tareas sueltas ni títulos — solo
+ * cifras (racha, %, contadores) y la franja de la semana (ritmo, no
+ * contenido). En el pie, un QR generado en el propio dispositivo apunta a
+ * la app para quien la reciba pueda entrar. Todo es local: la imagen no
+ * sale del dispositivo hasta que el usuario la comparte.
  */
 
-/** Títulos que entran en la tarjeta; el resto se resume con «+N más». */
-export const SHARE_TOP_LIMIT = 5;
+/** Enlace al que apunta el QR de la tarjeta. */
+export const APP_URL = "https://ald-a.vercel.app";
+/** El mismo enlace, legible para quien prefiera teclearlo. */
+export const APP_DISPLAY_URL = "ald-a.vercel.app";
 
 export interface DaySharePayload {
   /** ISO «YYYY-MM-DD» — la semilla del sello. */
@@ -31,20 +39,25 @@ export interface DaySharePayload {
   total: number;
   /** «martes, 29 de septiembre». */
   dateLabel: string;
-  /** Primeras tareas completadas (hojas, no borradas), por prioridad. */
-  topTitles: string[];
-  /** Completadas que no caben y se resumen con «+N más». */
-  extraTitles: number;
+  /** Puntos de la semana (lunes → domingo): solo estado, jamás contenido. */
+  week: WeekDot[];
+  /** Días de la semana ya cumplidos. */
+  weekFulfilled: number;
+  /** Tareas completadas de lunes a hoy — una cifra, nada más. */
+  weekDone: number;
 }
 
 export function buildSharePayload(tasks: Task[], todayISO: string): DaySharePayload {
   const { current, best, today } = computeStreaks(tasks, todayISO);
   const pct = today.total > 0 ? Math.round((today.done / today.total) * 100) : 0;
 
-  const completed = leafTasksOfDay(tasks, todayISO)
-    .filter((t) => t.status === "done" && !t.deletedAt && t.title.trim().length > 0)
-    .sort((a, b) => a.priority - b.priority || a.order - b.order);
-  const topTitles = completed.slice(0, SHARE_TOP_LIMIT).map((t) => t.title.trim());
+  const week = weekDots(tasks, todayISO);
+  const weekFulfilled = week.filter((d) => d.state === "done").length;
+  let weekDone = 0;
+  for (const d of week) {
+    if (d.date > todayISO) continue; // lo que aún no llega no cuenta
+    weekDone += dayStat(tasks, d.date).done;
+  }
 
   return {
     dateISO: todayISO,
@@ -54,8 +67,9 @@ export function buildSharePayload(tasks: Task[], todayISO: string): DaySharePayl
     done: today.done,
     total: today.total,
     dateLabel: formatLocalDate(parseISODate(todayISO)),
-    topTitles,
-    extraTitles: Math.max(0, completed.length - topTitles.length),
+    week,
+    weekFulfilled,
+    weekDone,
   };
 }
 
@@ -92,7 +106,7 @@ export function currentThemeColors(): ShareTheme {
   };
 }
 
-function fillRoundRect(
+function roundRectPath(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -108,6 +122,17 @@ function fillRoundRect(
   ctx.arcTo(x, y + h, x, y, rr);
   ctx.arcTo(x, y, x + w, y, rr);
   ctx.closePath();
+}
+
+function fillRoundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  roundRectPath(ctx, x, y, w, h, r);
   ctx.fill();
 }
 
@@ -134,7 +159,7 @@ function drawDecor(ctx: CanvasRenderingContext2D, theme: ShareTheme): void {
   for (let i = 0; i < 34; i++) {
     const x = rnd() * W;
     const y = rnd() * H;
-    if (x > 140 && x < 940 && y > 300 && y < 1840) continue; // deja el centro limpio
+    if (x > 140 && x < 940 && y > 300 && y < 1870) continue; // deja el centro limpio
     const w = 14 + rnd() * 18;
     const h = 10 + rnd() * 10;
     ctx.save();
@@ -160,11 +185,98 @@ function center(
   ctx.fillText(text, W / 2, y);
 }
 
-function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
-  if (ctx.measureText(text).width <= maxW) return text;
-  let s = text;
-  while (s.length > 1 && ctx.measureText(`${s}…`).width > maxW) s = s.slice(0, -1);
-  return `${s}…`;
+/** Punto de la semana: ritmo visual, nunca hay texto privado dentro. */
+function drawWeekDot(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+  state: string,
+  theme: ShareTheme,
+): void {
+  ctx.save();
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  if (state === "done") {
+    ctx.fillStyle = theme.accent;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    // visto en el color del fondo
+    ctx.strokeStyle = theme.bg;
+    ctx.lineWidth = Math.max(4, r * 0.3);
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.42, cy + r * 0.04);
+    ctx.lineTo(cx - r * 0.1, cy + r * 0.38);
+    ctx.lineTo(cx + r * 0.46, cy - r * 0.38);
+    ctx.stroke();
+  } else if (state === "today") {
+    ctx.fillStyle = withAlpha(theme.accent, 0.25);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = theme.accent;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (state === "missed") {
+    ctx.strokeStyle = withAlpha(theme.muted, 0.9);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (state === "empty") {
+    ctx.strokeStyle = withAlpha(theme.muted, 0.45);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
+    ctx.stroke();
+  } else {
+    // futuro: punteado, «aún no juega»
+    ctx.strokeStyle = withAlpha(theme.muted, 0.3);
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * QR sobre placa blanca (los códigos se leen sobre fondo claro en
+ * cualquier tema). Módulos con tamaño entero para que salgan nítidos:
+ * la borrosidad mata el escaneo.
+ */
+function drawQr(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  size: number,
+  theme: ShareTheme,
+): void {
+  const m = qrMatrix(text);
+  const n = m.length;
+  const quiet = 4; // módulos de silencio mínimos según la norma
+  const cell = Math.max(1, Math.floor(size / (n + quiet * 2)));
+  const qrPx = cell * n;
+  const off = Math.round((size - qrPx) / 2); // margen blanco real
+
+  roundRectPath(ctx, x, y, size, size, 24);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.strokeStyle = withAlpha(theme.muted, 0.45);
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  ctx.fillStyle = "#141414";
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (m[r][c]) ctx.fillRect(x + off + c * cell, y + off + r * cell, cell, cell);
+    }
+  }
 }
 
 export async function renderShareCard(
@@ -210,7 +322,7 @@ export async function renderShareCard(
     center(ctx, `mejor racha · ${payload.best}`, 950, `500 36px ${body}`, theme.muted);
   }
 
-  // Progreso de hoy
+  // Progreso de hoy (solo cifras)
   if (payload.total > 0) {
     setTracking(ctx, 10);
     ctx.textAlign = "left";
@@ -251,41 +363,57 @@ export async function renderShareCard(
   ctx.fillStyle = withAlpha(theme.muted, 0.25);
   ctx.fillRect(M, 1285, W - 2 * M, 2);
 
-  // Lo que completaste
-  const showTitles =
-    payload.extraTitles > 0 ? payload.topTitles.slice(0, SHARE_TOP_LIMIT - 1) : payload.topTitles;
-  const hidden = payload.topTitles.length - showTitles.length + payload.extraTitles;
-
+  // Franja semanal — el ritmo de la semana, nunca el contenido
+  setTracking(ctx, 10);
   ctx.textAlign = "left";
-  if (showTitles.length > 0) {
-    ctx.font = `600 46px ${display}`;
-    ctx.fillStyle = theme.fg;
-    ctx.fillText("Completaste hoy ✅", M, 1378);
-    const maxW = W - 2 * M - 60;
-    showTitles.forEach((title, i) => {
-      const y = 1468 + i * 82;
-      ctx.font = `700 44px ${body}`;
-      ctx.fillStyle = theme.accent;
-      ctx.fillText("✓", M, y);
-      ctx.font = `500 44px ${body}`;
-      ctx.fillStyle = theme.fg;
-      ctx.fillText(ellipsize(ctx, title, maxW), M + 60, y);
-    });
-    if (hidden > 0) {
-      ctx.font = `500 40px ${body}`;
-      ctx.fillStyle = theme.muted;
-      ctx.fillText(`+${hidden} más`, M + 60, 1468 + showTitles.length * 82);
-    }
-  } else {
-    ctx.font = `600 46px ${display}`;
-    ctx.fillStyle = theme.muted;
-    ctx.fillText(payload.total > 0 ? "Aún nada cerrado 💪" : "Día despejado ☀️", M, 1378);
-  }
-
-  // Pie
-  setTracking(ctx, 4);
-  center(ctx, "Organiza tu día con Mis Tareas", 1875, `600 34px ${body}`, theme.muted);
+  ctx.font = `700 36px ${body}`;
+  ctx.fillStyle = theme.muted;
+  ctx.fillText("ESTA SEMANA", M, 1335);
   setTracking(ctx, 0);
+
+  const dotY = 1405;
+  const dotR = 26;
+  const startX = M + 30;
+  const gap = (W - 2 * M - 60) / 6;
+  payload.week.forEach((d, i) => {
+    const cx = startX + i * gap;
+    drawWeekDot(ctx, cx, dotY, dotR, d.state, theme);
+    ctx.textAlign = "center";
+    ctx.font = `700 26px ${body}`;
+    ctx.fillStyle = theme.muted;
+    ctx.fillText(d.label.toUpperCase(), cx, 1465);
+  });
+
+  // Cifras de la semana (se encoge si no cabe)
+  const statText = `${payload.weekFulfilled} de 7 días cumplidos · ${payload.weekDone} tareas completadas`;
+  ctx.textAlign = "left";
+  let statPx = 40;
+  ctx.font = `500 ${statPx}px ${body}`;
+  const statMax = W - 2 * M;
+  while (ctx.measureText(statText).width > statMax && statPx > 26) {
+    statPx -= 2;
+    ctx.font = `500 ${statPx}px ${body}`;
+  }
+  ctx.fillStyle = theme.fg;
+  ctx.fillText(statText, M, 1525);
+
+  // QR a la app + llamada a la acción (generado en el dispositivo)
+  const qrSize = 300;
+  drawQr(ctx, APP_URL, M, 1560, qrSize, theme);
+
+  const tx = M + qrSize + 60;
+  ctx.textAlign = "left";
+  setTracking(ctx, 6);
+  ctx.font = `700 36px ${body}`;
+  ctx.fillStyle = theme.fg;
+  ctx.fillText("ORGANIZA TU DÍA", tx, 1650);
+  setTracking(ctx, 0);
+  ctx.font = `500 30px ${body}`;
+  ctx.fillStyle = theme.muted;
+  ctx.fillText("escanea el código", tx, 1712);
+  ctx.font = `700 42px ${display}`;
+  ctx.fillStyle = theme.accent;
+  ctx.fillText(APP_DISPLAY_URL, tx, 1785);
 
   return await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(

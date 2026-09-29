@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useStore } from "@/store/useStore";
 import { db } from "@/store/db";
 import {
+  APP_URL,
   buildSharePayload,
   currentThemeColors,
   renderShareCard,
@@ -43,7 +44,7 @@ export default function ShareDayButton({ className, children }: Props) {
         try {
           await navigator.share({
             files: [file],
-            text: `🔥 ${payload.streak} ${payload.streak === 1 ? "día" : "días"} seguidos con Mis Tareas`,
+            text: `🔥 ${payload.streak} ${payload.streak === 1 ? "día" : "días"} seguidos con Mis Tareas — ${APP_URL}`,
           });
         } catch (err) {
           // Cancelar la hoja de compartir no es un error; el resto sí.

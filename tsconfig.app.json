@@ -8,6 +8,7 @@
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "verbatimModuleSyntax": true,
+    "allowSyntheticDefaultImports": true,
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
