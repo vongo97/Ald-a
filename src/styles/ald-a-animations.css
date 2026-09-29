@@ -6,7 +6,7 @@
    con el original, todas marcadas con «ADAPTACIÓN», son correcciones de
    integración con nuestro markup/React:
    · .cd-needle deja de girar en bucle de 60 s (demo): la posición de la
-     hora real la pone DayRing.tsx vía --needle-rot.
+     hora real la pone DayOrbit.tsx vía --needle-rot.
    · Los hover de task-card en editorial/warm-tech llevan !important:
      la animación de entrada con `forwards` tiene más prioridad que una
      declaración normal y anulaba el lift del hover.
@@ -16,8 +16,8 @@
      animación de entrada dejaba la completada en opacity:0 (invisible).
    · button:hover de warm-tech excluye .dock-item para no robarle la
      magnificación del dock.
-   · Reglas de visibilidad: .day-ring solo en Cronodisco y .ink-stroke
-     solo en Tinta viva (en el resto no se muestran).
+   · Reglas de visibilidad: .ink-stroke solo se muestra en Tinta viva
+     (en el resto de temas no aparece).
 
    El puente (ald-a-animations.js original) vive en src/anim/bridge.ts:
    asigna --d escalonado y pathLength="100" a los trazos de tinta.
@@ -231,12 +231,8 @@
 /* ============================================================
    1 · CRONODISCO
    Sensación: un instrumento vivo. El tiempo gira y las tareas laten.
-   Las clases .cd-* viven en el SVG de DayRing.tsx.
+   Las clases .cd-* viven en el SVG de DayOrbit.tsx.
    ============================================================ */
-
-/* El reloj del día solo se muestra en este tema */
-.day-ring { display: none; }
-[data-theme="cronodisco"] .day-ring { display: flex; }
 
 /* Anillo exterior de ticks: rotación lenta continua (el día transcurre) */
 [data-theme="cronodisco"] .cd-ticks {
@@ -246,34 +242,25 @@
 @keyframes cd-spin { to { transform: rotate(360deg); } }
 
 /* ADAPTACIÓN: la aguja ya no gira en bucle de 60 s (era una demo que
-   daba vértigo). DayRing pone --needle-rot con la hora real y aquí solo
-   se interpola el movimiento cuando cambia el minuto. */
+   daba vértigo). DayOrbit pone --needle-rot con la hora real y aquí
+   solo se interpola el movimiento cuando cambia el minuto. */
 [data-theme="cronodisco"] .cd-needle {
   transform-origin: 115px 115px;
   transform: rotate(var(--needle-rot, 0deg));
   transition: transform .6s cubic-bezier(.3,.9,.4,1);
 }
 
-/* Arcos de tarea: laten suavemente como señales */
+/* Arcos de tarea: laten suavemente como señales.
+   ADAPTACIÓN: solo cambia la opacidad. Antes los keyframes forzaban
+   stroke-width 7↔9 y anulaban el grosor de diseño (10) con el que
+   DayOrbit calcula la compensación de las puntas redondas. El ritmo
+   escalonado lo pone el propio svg con animation-delay inline. */
 [data-theme="cronodisco"] .cd-arc {
   animation: cd-pulse 3s ease-in-out infinite;
 }
-[data-theme="cronodisco"] .cd-arc:nth-of-type(2) { animation-delay: 1s; }
-[data-theme="cronodisco"] .cd-arc:nth-of-type(3) { animation-delay: 2s; }
 @keyframes cd-pulse {
-  0%, 100% { opacity: .8; stroke-width: 7; }
-  50%      { opacity: 1; stroke-width: 9; }
-}
-
-/* Punto de tarea: "blip" tipo radar al cargar */
-[data-theme="cronodisco"] .cd-dot {
-  transform-box: fill-box; transform-origin: center;
-  animation: cd-blip 2.6s ease-out infinite;
-  animation-delay: calc(var(--d, 0) * 600ms);
-}
-@keyframes cd-blip {
-  0%        { opacity: 1; transform: scale(.4); }
-  70%, 100% { opacity: 0; transform: scale(2.4); }
+  0%, 100% { opacity: .78; }
+  50%      { opacity: 1; }
 }
 
 /* Cards de tarea: entran orbitando levemente */

@@ -10,14 +10,7 @@ import StreakCard from "@/components/StreakCard";
 import DayOrbit from "@/components/DayOrbit";
 import ShareDayButton from "@/components/ShareDayButton";
 import { toISODate, startOfDay } from "@/domain/dateutils";
-
-/** «DOMINGO · 27 SEP» — antetítulo de las cabeceras temáticas de Hoy. */
-const fmtWeekday = new Intl.DateTimeFormat("es-ES", { weekday: "long" });
-const MESES = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
-function eyebrowDe(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  return `${fmtWeekday.format(new Date(y, m - 1, d)).toUpperCase()} · ${d} ${MESES[m - 1]}`;
-}
+import { eyebrowDe } from "@/domain/orbit";
 
 export default function TodayView() {
   const pushToast = useStore((s) => s.pushToast);

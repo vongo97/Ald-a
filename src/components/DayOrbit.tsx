@@ -1,8 +1,21 @@
 import { useEffect, useState } from "react";
-import { useStore } from "@/store/useStore";
-import { toggleWithUndo } from "@/store/useStore";
+import type { CSSProperties } from "react";
+import { useStore, toggleWithUndo } from "@/store/useStore";
 import { toggleTask } from "@/store/actions";
 import { priorityScore } from "@/domain/priority";
+import {
+  CX,
+  CY,
+  R_ARCO,
+  CARRILES,
+  SW_ARCO,
+  degOf,
+  polar,
+  tramoDe,
+  arcSpan,
+  packLanes,
+  dyParaEtiquetas,
+} from "@/domain/orbit";
 import type { Task } from "@/domain/types";
 
 /**
@@ -14,15 +27,9 @@ import type { Task } from "@/domain/types";
  * `centroid()` de d3-shape/arc) y la aguja marca la hora real vía
  * `--needle-rot`.
  *
- * Investigación aplicada (d3-shape/arc):
- *  - `padAngle` → PAD_GRADOS: los arcos contiguos se separan un poco.
- *  - El `stroke-linecap: round` sobresale strokeWidth/2 por extremo,
- *    así que el arco se encoge esa cantidad (capFor) por cada lado:
- *    lo pintado es exactamente la duración de la tarea.
- *  - Etiquetas a mitad de ángulo, ancladas hacia fuera según el lado.
+ * La geometría pura (tramos, compensación de puntas redondas, carriles,
+ * antetítulo) vive en src/domain/orbit.ts con sus tests.
  *
- * Geometría: viewBox cuadrado -35 -20 300 270 con el centro en 115,115
- * (coincide con los `transform-origin` de cd-ticks / cd-needle del CSS).
  * TodayView lo monta dentro de un bloque `aspect-square` con el título
  * dentro, arriba a la izquierda; el svg va `absolute inset-0` con
  * `overflow: visible` para que las etiquetas nunca se recorten.
@@ -36,62 +43,11 @@ interface Props {
   today: string;
 }
 
-const CX = 115;
-const CY = 115;
-const R_ARCO = 72;
-/** Carriles para horarios solapados (del anillo hacia dentro). */
-const CARRILES = [72, 61, 50, 39];
 const R_LABEL = 84;
 const TRUNC = 13;
-const SW_ARCO = 10;
-/** Separación entre arcos contiguos, en grados (el «padAngle»). */
-const PAD_GRADOS = 2.5;
 
 /** Paleta de arcos: ámbar del tema, teal, oro y coral. */
 const COLORES = ["var(--accent)", "#5fa8a0", "#d9b45a", "var(--accent-2)"];
-
-const toMin = (hhmm: string) => parseInt(hhmm.slice(0, 2), 10) * 60 + parseInt(hhmm.slice(3), 10);
-const degOf = (m: number) => (m / 1440) * 360;
-const polar = (r: number, deg: number) => ({
-  x: CX + r * Math.cos(((deg - 90) * Math.PI) / 180),
-  y: CY + r * Math.sin(((deg - 90) * Math.PI) / 180),
-});
-
-/** Tramo [inicio, fin] en minutos que ocupa la tarea en el reloj. */
-function tramo(t: Task): [number, number] {
-  if (t.timeBlock) {
-    const a = toMin(t.timeBlock.start);
-    let b = toMin(t.timeBlock.end);
-    if (b <= a) b = Math.min(a + 30, 1439);
-    return [a, b];
-  }
-  // Sin bloque: un tramo cortito centrado en su hora.
-  const c = t.dueTime ? toMin(t.dueTime) : 12 * 60;
-  return [Math.max(0, c - 15), Math.min(1439, c + 15)];
-}
-
-/**
- * Arco del reloj. Compensa lo que la punta redondeada añade por extremo
- * y separa a los vecinos con PAD_GRADOS: lo que se ve representa la
- * duración real. Los tramos minúsculos salen como punto redondeado.
- */
-function arcoPath(r: number, m1: number, m2: number): string {
-  const cap = ((SW_ARCO / 2 / r) * 180) / Math.PI;
-  const margen = cap + PAD_GRADOS / 2;
-  const d1 = degOf(m1);
-  const d2 = degOf(m2);
-  let a = d1 + margen;
-  let b = d2 - margen;
-  if (b - a < 0.6) {
-    const mid = (d1 + d2) / 2;
-    a = mid - 0.3;
-    b = mid + 0.3;
-  }
-  const p1 = polar(r, a);
-  const p2 = polar(r, b);
-  const large = b - a > 180 ? 1 : 0;
-  return `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
-}
 
 export default function DayOrbit({ tasks, today }: Props) {
   // La hora se refresca cada 30 s; la aguja interpola con su transición.
@@ -106,22 +62,38 @@ export default function DayOrbit({ tasks, today }: Props) {
   const minutes = now.getHours() * 60 + now.getMinutes();
 
   // Los arcos, en orden de hora; carril para los horarios solapados.
-  const arcos = [...tasks]
-    .map((t) => ({ t, tramo: tramo(t) }))
+  const ordenados = [...tasks]
+    .map((t) => ({ t, tramo: tramoDe(t) }))
     .sort((a, b) => a.tramo[0] - b.tramo[0]);
-  const finCarril: number[] = [];
-  const pintados = arcos.map(({ t, tramo: [m1, m2] }, i) => {
-    let lane = finCarril.findIndex((fin) => fin <= m1);
-    if (lane === -1) {
-      lane = finCarril.length < CARRILES.length ? finCarril.length : CARRILES.length - 1;
-      finCarril.push(m2);
-    } else {
-      finCarril[lane] = m2;
-    }
-    return { t, m1, m2, lane, color: COLORES[i % COLORES.length] };
-  });
+  const carriles = packLanes(ordenados.map((o) => o.tramo));
+  const pintados = ordenados.map(({ t, tramo: [m1, m2] }, i) => ({
+    t,
+    m1,
+    m2,
+    lane: carriles[i],
+    color: COLORES[i % COLORES.length],
+  }));
 
   const completar = (t: Task) => void toggleWithUndo(t, toggleTask, pushToast);
+
+  // Posición de cada etiqueta + desplazamiento vertical anti-solape
+  // (greedy en dominio, en orden de pintado).
+  const etiquetas = pintados.map(({ t, m1, m2 }) => {
+    const ang = degOf((m1 + m2) / 2);
+    const cos = Math.cos(((ang - 90) * Math.PI) / 180);
+    const lp = polar(R_LABEL, ang);
+    const score = priorityScore(t).score;
+    const titulo = t.title.length > TRUNC ? `${t.title.slice(0, TRUNC - 1)}…` : t.title;
+    return {
+      x: lp.x,
+      y: lp.y,
+      lado: (cos >= 0 ? "D" : "I") as "D" | "I",
+      titulo,
+      score,
+      ancho: (titulo.length + 4) * 4.9, // «★nn» ≈ 4 caracteres más
+    };
+  });
+  const dyps = dyParaEtiquetas(etiquetas);
 
   return (
     <svg
@@ -129,7 +101,7 @@ export default function DayOrbit({ tasks, today }: Props) {
       className="day-orbit absolute inset-0 h-full w-full"
       style={{ overflow: "visible" }}
       data-testid="day-orbit"
-      role="img"
+      role="group"
       aria-label={`Reloj de 24 horas del ${today} con ${pintados.length} tareas con hora`}
     >
       {/* Anillo interior punteado: la textura del mockup */}
@@ -171,16 +143,11 @@ export default function DayOrbit({ tasks, today }: Props) {
       {/* Arco + etiqueta por tarea (toca el grupo = completas) */}
       {pintados.map(({ t, m1, m2, lane, color }, i) => {
         const r = CARRILES[lane];
-        const mid = (m1 + m2) / 2;
-        const ang = degOf(mid);
-        const cos = Math.cos(((ang - 90) * Math.PI) / 180);
-        // Radio de etiqueta: carriles alternos se separan en diagonal,
-        // pero no en horizontal (ahí sobra el sitio y evitamos desbordes).
-        const rLabel = R_LABEL + (lane % 2) * 13 * (1 - Math.abs(cos));
-        const lp = polar(rLabel, ang);
-        const anchor = cos >= 0 ? "start" : "end";
-        const score = priorityScore(t).score;
-        const titulo = t.title.length > TRUNC ? `${t.title.slice(0, TRUNC - 1)}…` : t.title;
+        const { a, b } = arcSpan(r, m1, m2);
+        const p1 = polar(r, a);
+        const p2 = polar(r, b);
+        const d = `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A ${r} ${r} 0 ${b - a > 180 ? 1 : 0} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+        const et = etiquetas[i];
         return (
           <g
             key={t.id}
@@ -198,7 +165,7 @@ export default function DayOrbit({ tasks, today }: Props) {
           >
             <path
               className="cd-arc"
-              d={arcoPath(r, m1, m2)}
+              d={d}
               fill="none"
               stroke={color}
               strokeWidth={SW_ARCO}
@@ -207,7 +174,7 @@ export default function DayOrbit({ tasks, today }: Props) {
             />
             {/* Zona de toque generosa (el arco fino es difícil de pillar) */}
             <path
-              d={arcoPath(r, m1, m2)}
+              d={d}
               fill="none"
               stroke="transparent"
               strokeWidth={24}
@@ -215,14 +182,14 @@ export default function DayOrbit({ tasks, today }: Props) {
               pointerEvents="stroke"
             />
             <text
-              x={lp.x}
-              y={lp.y}
-              textAnchor={anchor}
+              x={et.x}
+              y={et.y + dyps[i]}
+              textAnchor={et.lado === "D" ? "start" : "end"}
               dominantBaseline="middle"
               fontSize={9}
               fill="var(--text)"
             >
-              {titulo} <tspan fill="var(--text-2)" fontSize={8}>★{score}</tspan>
+              {et.titulo} <tspan fill="var(--text-2)" fontSize={8}>★{et.score}</tspan>
             </text>
           </g>
         );
@@ -231,7 +198,7 @@ export default function DayOrbit({ tasks, today }: Props) {
       {/* Aguja de la hora actual (rotación real vía --needle-rot) */}
       <g
         className="cd-needle"
-        style={{ ["--needle-rot" as string]: `${(minutes / 1440) * 360}deg` } as React.CSSProperties}
+        style={{ ["--needle-rot" as string]: `${(minutes / 1440) * 360}deg` } as CSSProperties}
       >
         <line
           x1={CX}
