@@ -9,6 +9,7 @@ import Toasts from "@/components/Toasts";
 import DayCelebration from "@/components/DayCelebration";
 import TodayView from "@/views/TodayView";
 import DayView from "@/views/DayView";
+import CalendarView from "@/views/CalendarView";
 import InboxView from "@/views/InboxView";
 import ProjectsView from "@/views/ProjectsView";
 import LabelsView from "@/views/LabelsView";
@@ -223,6 +224,7 @@ function AppInner() {
           >
             {view === "hoy" && <TodayView />}
             {view === "dia" && <DayView />}
+            {view === "calendario" && <CalendarView />}
             {view === "bandeja" && <InboxView />}
             {view === "proyectos" && <ProjectsView />}
             {view === "etiquetas" && <LabelsView />}

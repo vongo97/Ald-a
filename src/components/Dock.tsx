@@ -17,6 +17,7 @@ import type { ViewId } from "@/domain/types";
 const ITEMS: { id: ViewId; icon: string; label: string }[] = [
   { id: "hoy", icon: "☀️", label: "Hoy" },
   { id: "dia", icon: "📅", label: "Día" },
+  { id: "calendario", icon: "🗓️", label: "Calendario" },
   { id: "bandeja", icon: "📥", label: "Bandeja" },
   { id: "proyectos", icon: "📁", label: "Proyectos" },
   { id: "etiquetas", icon: "🏷️", label: "Etiquetas" },
@@ -52,7 +53,7 @@ export default function Dock() {
       </div>
 
       <nav
-        className="dock glass fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-end gap-1 rounded-2xl px-2 py-1.5 sm:gap-2 sm:px-3"
+        className="dock glass fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-end gap-0.5 rounded-2xl px-2 py-1.5 sm:gap-2 sm:px-3"
         aria-label="Navegación principal"
       >
         {ITEMS.map((it) => (
