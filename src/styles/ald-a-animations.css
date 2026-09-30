@@ -263,6 +263,18 @@
   50%      { opacity: 1; }
 }
 
+/* Casilla de la etiqueta: el único modo de completar desde el reloj
+   (el toque despliega o desglosa). Al pasar el puntero por su zona
+   de 14 px se tiñe de acento (el grupo absorbe el :hover, que si no
+   solo llegaría al trazo de 1,2 px del rectángulo). */
+[data-theme="cronodisco"] .cd-check-g:hover .cd-check {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+[data-theme="cronodisco"] .cd-check {
+  transition: fill .15s ease, stroke .15s ease;
+}
+
 /* Cards de tarea: entran orbitando levemente */
 [data-theme="cronodisco"] .task-card {
   opacity: 0; transform: translateX(-10px) rotate(-1deg);

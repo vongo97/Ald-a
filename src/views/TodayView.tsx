@@ -10,7 +10,7 @@ import StreakCard from "@/components/StreakCard";
 import DayOrbit from "@/components/DayOrbit";
 import ShareDayButton from "@/components/ShareDayButton";
 import { toISODate, startOfDay } from "@/domain/dateutils";
-import { eyebrowDe } from "@/domain/orbit";
+import { eyebrowDe, tieneHora } from "@/domain/orbit";
 
 export default function TodayView() {
   const pushToast = useStore((s) => s.pushToast);
@@ -43,13 +43,12 @@ export default function TodayView() {
   // La misma fuente que usa el modal: una sola definición de "vencida".
   const { overdue, proposals, applySuggestions } = useOverdue();
 
-  // Reparto para Cronodisco: lo con hora vive en el reloj, lo demás en
-  // la lista «Sin hora» (nada se pierde al retirar la lista de arriba).
-  const { conHora, sinHora } = useMemo(() => {
-    const conHora = todays.filter((t) => t.timeBlock || t.dueTime);
-    const ids = new Set(conHora.map((t) => t.id));
-    return { conHora, sinHora: todays.filter((t) => !ids.has(t.id)) };
-  }, [todays]);
+  // Reparto para Cronodisco: el reloj recibe TODAS las de hoy y decide
+  // internamente qué se sienta en el anillo (raíces con hora + el
+  // desglose abierto); aquí solo se aparta lo que vive en «Sin hora»
+  // (tareas sin hora que no son hija de nadie: nada se pierde al
+  // retirar la lista de arriba).
+  const sinHora = useMemo(() => todays.filter((t) => !tieneHora(t)), [todays]);
 
   if (!allTasks || !projects) return null;
 
@@ -63,7 +62,7 @@ export default function TodayView() {
             mockup. El svg va primero para que el texto quede encima.
           */}
           <div className="relative mx-auto mb-4 aspect-square w-full max-w-xl rounded-3xl bg-[var(--surface)]">
-            <DayOrbit tasks={conHora} today={today} />
+            <DayOrbit tasks={todays} today={today} />
             <div className="pointer-events-none absolute left-4 top-3.5 sm:left-5 sm:top-4">
               <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted">
                 {eyebrowDe(today)}
