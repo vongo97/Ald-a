@@ -38,6 +38,17 @@
      alfiler de gabinete, la rotación de las cards…) pensados para
      tarjetas de lista, no para un diálogo. Ver `.modal-card` más abajo. */
   --radius-modal: 12px;
+  /* El acento CUANDO ES RELLENO con texto blanco encima (botón
+     primario, «+» del dock). No siempre es lo mismo que `--accent`:
+     cabinet usa oro claro como color de texto sobre fondo verde
+     oscuro, pero necesita un oro mucho más oscuro para que el blanco
+     del botón se lea. Cambiar `--accent` a ciegas rompía la marca. */
+  --accent-solid: var(--accent);
+  /* Peligro. El rosa claro es el color de «borrar» sobre fondo
+     oscuro; sobre crema se quedaba en 2,17:1, así que los temas de
+     ficha clara lo oscurecen en su ámbito de tinta. */
+  --danger: #fb7185;
+  --danger-line: color-mix(in srgb, #f43f5e 40%, transparent);
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Fraunces", Georgia, serif;
@@ -131,7 +142,14 @@
   --font-display: Georgia, serif;
 }
 
-/* 2 · GABINETE */
+/* 2 · GABINETE
+   El único tema con DOS tintas: la página es verde de museo oscuro y las
+   fichas son crema de cartela. Por eso `--text` y `--surface` son el MISMO
+   crema — así lo da kimik3 — y `--fg` sale crema, de modo que todo
+   `.text-primary` dentro de una ficha quedaba crema sobre crema
+   (invisible) y `--card-hover` mezclaba crema con crema (hover sin
+   efecto). La tinta de la ficha se redefine más abajo, en el «ámbito
+   de tinta»; aquí solo va lo que vive sobre el fondo oscuro. */
 [data-theme="gabinete"] {
   --bg: #22271f;
   --surface: #efe6d2;
@@ -140,6 +158,9 @@
   --border: #4a5240;
   --accent: #b08d57;
   --accent-2: #8a6a3a;
+  /* Relleno con texto blanco: el oro claro de la marca solo se lee
+     3,09:1 con blanco, así que el botón usa un oro más oscuro. */
+  --accent-solid: #7a5a2e;
   --radius: 3px;
   --radius-modal: 4px;
   --shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
@@ -249,15 +270,21 @@
   vertical-align: middle;
 }
 
-/* Gabinete: alfiler dorado sobre cada card + rotación */
+/* Gabinete: alfiler dorado sobre cada ficha + rotación.
+   La rotación va SOLO en `.task-card` (las fichas de la lista, que es
+   donde se lee como papel clavado). Antes estaba en `.card`, y eso
+   inclinaba también el panel de racha, el calendario y los resúmenes
+   de Revisión: números y barras de progreso torcidas. */
+/* `position: relative` va en `.card` y no en `.task-card` porque el
+   alfiler es un `::before` de TODA ficha: sin un ancestro posicionado
+   que lo contenga se ancla al de más arriba y aparece en el otro
+   extremo de la página. La inclinación, en cambio, vive en
+   ald-a-animations.css: `gb-mount` termina en
+   `rotate(var(--rot))` con `forwards`, de modo que un `transform`
+   estático aquí no se vería nunca. */
 [data-theme="gabinete"] .card {
   position: relative;
   background: var(--surface);
-  color: #3a352a;
-  transform: rotate(-0.6deg);
-}
-[data-theme="gabinete"] .card:nth-child(2n) {
-  transform: rotate(0.7deg);
 }
 [data-theme="gabinete"] .card::before {
   content: "";
@@ -270,17 +297,60 @@
   background: radial-gradient(circle at 35% 35%, #d8b878, #8a6a3a);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
 }
-/* El modal sí necesita el texto marrón: en gabinete `--fg` es crema,
-   igual que `--card-bg`, así que sin esto sería crema sobre crema.
-   `--fg`/`--fg-muted` se redeclaran en el propio modal (y heredan a
-   sus hijos) para que las clases `.text-primary` / `.text-muted` de
-   dentro también se lean. No lleva alfiler ni rotación: eso es de las
-   fichas de la lista, no de un diálogo. */
-[data-theme="gabinete"] .modal-card {
-  background: var(--surface);
-  color: #3a352a;
+
+/* ÁMBITO DE TINTA — la ficha de museo.
+   Todo lo que se pinta sobre crema necesita tinta oscura. Antes el
+   tema fallaba en 7 sitios de «Hoy» y 68 en «Ajustes»: el número de
+   la racha, las chips, las horas, los títulos de tarea y los rótulos
+   de la semana salían crema sobre crema. Y `--card-hover`, que es
+   `color-mix(surface 88%, text)`, mezclaba crema con crema: hover
+   invisible.
+
+   Dos trampas de la herencia, ambas comprobadas en el navegador:
+
+   1. Una custom property como `--fg: var(--text)` queda RESUELTA en
+      el elemento donde se declara. Redefinir `--text` en la ficha no
+      llega a `--fg`; hay que redeclarar `--fg` explícitamente.
+   2. `color` se hereda como valor ya calculado, no como variable. Si
+      la ficha solo redefine `--fg`, el texto SIN clase (el título de
+      `TaskItem`, el número grande de Revisión) sigue llevando el
+      crema que venía de `<body>`.
+
+   Y un cuidado con la especificidad (0,2,0): un `color:` sin capa
+   ganaría a las utilidades de Tailwind (0,1,0) y se comería el rojo
+   de «Eliminar» y el verde de «Hecho». Por eso el `color` va debajo,
+   en `@layer components`: solo se arregla la herencia y las
+   utilidades explícitas siguen mandando. Las variables pueden ir sin
+   capa —una declaración en el elemento siempre gana a la herencia—
+   y así `.text-primary`, `.text-muted`, `.text-accent`, `.btn-ghost`
+   y `.input` se corrigen solos.
+
+   Ratios medidos sobre la crema `#efe6d2`:
+     tinta #3a352a 9,82:1 · apagado #5f553c 5,93:1
+     oro de texto #6f5128 5,08:1 (y 4,69:1 sobre su tinte al 16 %)
+     blanco sobre oro de botón #7a5a2e 6,31:1 · laca #9f1239 6,46:1 */
+[data-theme="gabinete"] :is(.card, .chip, .input, .modal-card, .bg-surface, .bg-surface-hover) {
   --fg: #3a352a;
-  --fg-muted: #6d6144;
+  --fg-muted: #5f553c;
+  /* El oro de la marca (#b08d57) es para texto sobre verde oscuro:
+     sobre crema daba 2,49:1. Este oro oscuro es legible como texto
+     (5,08:1 sobre crema) y hasta sobre su propio tinte al 16 %
+     (4,69:1), que es lo que usan la insignia «hoy» del calendario y
+     los números de la semana. */
+  --accent: #6f5128;
+  --accent-solid: #7a5a2e;
+  --accent-soft: color-mix(in srgb, #6f5128 16%, transparent);
+  --accent-hover: color-mix(in srgb, #6f5128 85%, black);
+  --card-hover: color-mix(in srgb, #efe6d2 88%, #3a352a);
+  /* Laca de granero: el rosa de «Eliminar» daba 2,17:1 sobre crema. */
+  --danger: #9f1239;
+  --danger-line: color-mix(in srgb, #9f1239 40%, transparent);
+}
+
+@layer components {
+  [data-theme="gabinete"] :is(.card, .chip, .input, .modal-card, .bg-surface, .bg-surface-hover) {
+    color: var(--fg);
+  }
 }
 [data-theme="gabinete"] h1 {
   font-style: italic;
@@ -391,7 +461,7 @@ body {
   .btn-primary {
     @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-150 cursor-pointer;
     border-radius: var(--radius);
-    background: var(--accent);
+    background: var(--accent-solid);
     color: #fff;
   }
   .btn-primary:hover {
@@ -426,12 +496,12 @@ body {
   .btn-danger {
     @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-150 cursor-pointer border;
     border-radius: var(--radius);
-    border-color: color-mix(in srgb, #f43f5e 40%, transparent);
-    color: #fb7185;
+    border-color: var(--danger-line);
+    color: var(--danger);
     background: transparent;
   }
   .btn-danger:hover {
-    background: color-mix(in srgb, #f43f5e 10%, transparent);
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
   }
   .input {
     @apply w-full border px-3 py-2 text-sm transition-colors focus:outline-none;

@@ -99,7 +99,7 @@ export default function Dock() {
         <button
           type="button"
           onClick={() => openCapture()}
-          className="dock-item flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-lg font-bold text-white shadow-lg shadow-[var(--accent)]/30 transition-all duration-200 sm:h-11 sm:w-11"
+          className="dock-item flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent-solid)] text-lg font-bold text-white shadow-lg shadow-[var(--accent)]/30 transition-all duration-200 sm:h-11 sm:w-11"
           aria-label="Nueva tarea"
         >
           +

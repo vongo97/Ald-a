@@ -13,7 +13,23 @@ export type ThemeMode = "light" | "dark";
 export interface ThemeDef {
   id: string;
   label: string;
+  /**
+   * Tono del CONTENIDO: el de las fichas donde se lee. Es lo que
+   * decide la clase `.light`/`.dark`, y con ella las variantes
+   * `light:text-amber-700` y compañía de Tailwind.
+   *
+   * No siempre coincide con el tono de la página: gabinete tiene la
+   * pared verde de museo oscura y las fichas de pergamino claras, así
+   * que su contenido es claro aunque el marco sea oscuro.
+   */
   mode: ThemeMode;
+  /**
+   * Tono del MARCO (fondo de página), y solo del marco: decide
+   * `color-scheme`, o sea las barras de desplazamiento y los
+   * controles nativos del navegador. Por defecto, lo mismo que
+   * `mode`. Only `gabinete` lo separa del modo del contenido.
+   */
+  chrome?: ThemeMode;
   /** Descripción corta para el selector. */
   blurb: string;
   /** Color representativo para el preview del selector. */
@@ -52,7 +68,14 @@ export const THEMES: ThemeDef[] = [
   {
     id: "gabinete",
     label: "Gabinete",
-    mode: "dark",
+    // El contenido va sobre fichas de pergamino: las variantes `light:`
+    // de Tailwind (texto ámbar 700, chips pastel…) son las suyas. Con
+    // `mode: "dark"` salían ~15 combinaciones a 1,2:1 — ámbar claro
+    // sobre crema— en rótulos, chips y avisos de tarea vencida.
+    mode: "light",
+    // Pero la pared es verde oscuro, así que las barras y los controles
+    // nativos tienen que seguir siendo oscuros.
+    chrome: "dark",
     blurb: "Museo: pergamino sobre verde botella, latón",
     swatch: "#22271f",
   },

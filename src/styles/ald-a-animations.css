@@ -321,6 +321,20 @@
   animation: gb-mount .6s cubic-bezier(.2,.9,.3,1) forwards;
   animation-delay: calc(var(--d, 0) * 120ms);
 }
+/* La inclinación alterna se declara AQUÍ, y no como un `transform`
+   aparte, porque `gb-mount` acaba en `rotate(var(--rot))` con
+   `forwards`: mientras la animación esté aplicada (y lo está para
+   siempre) manda su valor final y un `transform` estático posterior no
+   se ve.
+
+   Y se declara sobre el hijo DIRECTO de `.task-list`, no sobre
+   `.task-card`: la ficha cuelga de `div.group > div.min-w-0 > .card`,
+   así que cada `.task-card` es hija única de su envoltorio y
+   `nth-child(2n)` no la alcanzaba nunca. El alterno estaba escrito
+   desde el principio y no había funcionado en ninguna ficha. */
+[data-theme="gabinete"] .task-list > :nth-child(2n) .task-card {
+  --rot: .7deg;
+}
 @keyframes gb-mount {
   0%   { opacity: 0; transform: translateY(24px) rotate(0deg) scale(.97); }
   100% { opacity: 1; transform: translateY(0) rotate(var(--rot,-.6deg)) scale(1); }

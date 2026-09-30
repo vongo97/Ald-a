@@ -24,13 +24,20 @@
           try { id = localStorage.getItem(KEY); } catch (e) {}
           if (!id) id = DEFAULT;
           document.documentElement.setAttribute("data-theme", id);
-          /* Los modos de cada tema (para clase .dark/.light) */
-          var dark = { "warm-tech":1, "cronodisco":1, "gabinete":1 };
-          var isDark = !!dark[id];
+          /* Tono del CONTENIDO (fichas) -> clase .light/.dark para las
+             variantes de Tailwind. OJO: es una copia manual de
+             `mode` en src/store/themes.ts; si añades un tema, cambia
+             las dos. Gabinete es "light" porque su contenido va sobre
+             pergamino, aunque su pared sea oscura. */
+          var light = { "editorial-calido":1, "digital-craft":1, "partitura":1, "tinta-viva":1, "gabinete":1 };
+          var isLight = !!light[id];
+          /* Tono del MARCO -> color-scheme (barras, controles).
+             Los temas bitonos lo separan del modo del contenido. */
+          var darkChrome = { "warm-tech":1, "cronodisco":1, "gabinete":1 };
           var el = document.documentElement;
-          el.classList.toggle("light", !isDark);
-          el.classList.toggle("dark", isDark);
-          el.style.colorScheme = isDark ? "dark" : "light";
+          el.classList.toggle("light", isLight);
+          el.classList.toggle("dark", !isLight);
+          el.style.colorScheme = darkChrome[id] ? "dark" : "light";
         } catch (e) {}
       })();
     </script>

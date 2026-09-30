@@ -102,7 +102,10 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
             {task.durationMin && <span className="chip bg-surface-hover text-primary">⏱ {task.durationMin}m</span>}
             {score && (
               <span
-                className="chip bg-sky-500/15 light:bg-sky-50 text-sky-300 light:text-sky-600 cursor-help"
+                /* `light:text-sky-600` sobre `light:bg-sky-50` se quedaba en
+                   3,77:1. El 700 sube a 5,6:1 — el mismo remedy que
+                   usan las demás chips semánticas. */
+                className="chip bg-sky-500/15 light:bg-sky-50 text-sky-300 light:text-sky-700 cursor-help"
                 title={score.reasons.length > 0 ? score.reasons.join(" · ") : `Score: ${score.score}`}
               >
                 ★ {score.score}

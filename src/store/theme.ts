@@ -30,11 +30,17 @@ export function applyTheme(themeId: string): void {
   // Tema activo
   el.setAttribute("data-theme", theme.id);
 
-  // Clase light/dark para las variantes de Tailwind
+  // Clase light/dark para las variantes de Tailwind. Refleja el tono
+  // del CONTENIDO (las fichas), no el de la página: en gabinete el
+  // contenido es pergamino claro sobre una pared oscura.
   const isDark = theme.mode === "dark";
   el.classList.toggle("light", !isDark);
   el.classList.toggle("dark", isDark);
-  el.style.colorScheme = theme.mode;
+
+  // `color-scheme` es lo del MARCO: barras de desplazamiento y
+  // controles nativos. Los temas bitonos (gabinete) lo separan del
+  // modo del contenido con `chrome`.
+  el.style.colorScheme = theme.chrome ?? theme.mode;
 
   // Color de la barra del navegador / PWA
   const meta = document.querySelector('meta[name="theme-color"]');
