@@ -38,17 +38,17 @@ export default function ReviewView() {
       </header>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <div className="card p-3">
+        <div className="card card-panel p-3">
           <h2 className="mb-2 text-sm font-semibold text-emerald-300 light:text-emerald-600">✅ Completadas (7 días)</h2>
           <p className="text-2xl font-bold">{data.done.length}</p>
           <p className="text-xs text-muted">Celebra el progreso.</p>
         </div>
-        <div className="card p-3">
+        <div className="card card-panel p-3">
           <h2 className="mb-2 text-sm font-semibold text-rose-300 light:text-rose-600">⚠️ Vencidas</h2>
           <p className="text-2xl font-bold">{data.overdue.length}</p>
           <p className="text-xs text-muted">Reprograma o elimina sin piedad.</p>
         </div>
-        <div className="card p-3">
+        <div className="card card-panel p-3">
           <h2 className="mb-2 text-sm font-semibold text-sky-300 light:text-sky-600">📥 Sin fecha</h2>
           <p className="text-2xl font-bold">{data.noDate.length}</p>
           <p className="text-xs text-muted">Dales fecha o suéltalas.</p>
@@ -62,7 +62,7 @@ export default function ReviewView() {
           const min = data.weekLoad.get(d) ?? 0;
           const pct = Math.min(100, Math.round((min / 300) * 100));
           return (
-            <div key={d} className="card flex-1 p-2 text-center" style={{ minWidth: 80 }}>
+            <div key={d} className="card card-panel flex-1 p-2 text-center" style={{ minWidth: 80 }}>
               <p className="text-xs text-muted">{d.slice(5)}</p>
               <div className="mx-auto mt-1 h-12 w-2.5 rounded-full bg-surface-hover">
                 <div className="w-full rounded-full bg-sky-400" style={{ height: `${pct}%`, marginTop: `${100 - pct}%` }} />

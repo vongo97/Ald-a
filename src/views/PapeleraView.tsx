@@ -142,7 +142,7 @@ export default function PapeleraView() {
       </p>
 
       {rows.length === 0 ? (
-        <div className="card p-4 text-sm text-muted">
+        <div className="card card-panel p-4 text-sm text-muted">
           🎉 Papelera de tareas vacía: no has borrado nada (o ya lo restauraste).
         </div>
       ) : (

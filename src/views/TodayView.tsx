@@ -109,7 +109,7 @@ export default function TodayView() {
       )}
 
       {overdue.length > 0 && (
-        <div className="card mb-4 border-amber-500/40 light:border-amber-300 bg-amber-500/10 light:bg-amber-50 p-3">
+        <div className="card card-panel mb-4 border-amber-500/40 light:border-amber-300 bg-amber-500/10 light:bg-amber-50 p-3">
           <p className="text-sm text-amber-200 light:text-amber-700">
             ⚠️ {overdue.length} tarea{overdue.length === 1 ? "" : "s"} vencida
             {overdue.length === 1 ? "" : "s"} desde antes de hoy.
@@ -135,14 +135,14 @@ export default function TodayView() {
       )}
 
       {capacity.overbooked && (
-        <div className="card mb-4 border-rose-500/40 light:border-rose-300 bg-rose-500/10 light:bg-rose-50 p-3 text-sm text-rose-200 light:text-rose-700">
+        <div className="card card-panel mb-4 border-rose-500/40 light:border-rose-300 bg-rose-500/10 light:bg-rose-50 p-3 text-sm text-rose-200 light:text-rose-700">
           🔋 Tu plan de hoy no cabe: {formatMinutes(capacity.committedMin + capacity.estimatedMin)} de{" "}
           {formatMinutes(capacity.capacityMin)} disponibles. Considera mover algo a mañana.
         </div>
       )}
 
       {deletedToday.length > 0 && (
-        <div className="card mb-4 p-3">
+        <div className="card card-panel mb-4 p-3">
           <p className="text-sm text-muted">
             🗑️ {deletedToday.length} tarea{deletedToday.length === 1 ? "" : "s"} de hoy en la papelera: no han
             desaparecido, están borradas.
@@ -172,7 +172,7 @@ export default function TodayView() {
 
 export function EmptyState({ icon, title, hint }: { icon: string; title: string; hint: string }) {
   return (
-    <div className="card flex flex-col items-center gap-1 p-8 text-center">
+    <div className="card card-panel flex flex-col items-center gap-1 p-8 text-center">
       <span className="text-3xl">{icon}</span>
       <p className="font-semibold text-primary">{title}</p>
       <p className="max-w-sm text-sm text-muted">{hint}</p>

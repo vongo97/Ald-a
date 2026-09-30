@@ -31,7 +31,7 @@ export default function StreakCard({ tasks }: { tasks: Task[] }) {
   const pct = today.total ? Math.round((today.done / today.total) * 100) : 0;
 
   return (
-    <div className="card mb-4 p-4" data-testid="streak-card">
+    <div className="card card-panel mb-4 p-4" data-testid="streak-card">
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="flex items-baseline gap-1">

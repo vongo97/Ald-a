@@ -124,7 +124,7 @@ export default function CalendarView() {
       />
 
       {/* Detalle del día seleccionado */}
-      <div className="card mt-4 p-3" data-testid="day-detail">
+      <div className="card card-panel mt-4 p-3" data-testid="day-detail">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-display text-base font-semibold text-primary">
             {dayLabel}

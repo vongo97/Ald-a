@@ -38,6 +38,15 @@
      alfiler de gabinete, la rotación de las cards…) pensados para
      tarjetas de lista, no para un diálogo. Ver `.modal-card` más abajo. */
   --radius-modal: 12px;
+  /* Y el mismo problema, un peldaño más abajo: `.card` la usan las
+     filas de la lista —que en cronodisco son tejas de reloj, y para eso
+     `--radius` es 999px— y también las tarjetas-panel. Una píldora de
+     999px sobre una caja de 400px de alto se topa en la mitad y se
+     convierte en un balón: el contenido de las esquinas se pinta FUERA
+     de la tarjeta (medido: 18 de 75 elementos en la rejilla del mes).
+     Las panel no heredan la forma de la ficha, así que llevan la suya.
+     Ver `.card-panel`. */
+  --radius-panel: var(--radius);
   /* El acento CUANDO ES RELLENO con texto blanco encima (botón
      primario, «+» del dock). No siempre es lo mismo que `--accent`:
      cabinet usa oro claro como color de texto sobre fondo verde
@@ -65,8 +74,14 @@
   --card-border: var(--border);
   --accent-secondary: var(--accent-2);
 
-  /* Derivados con color-mix(): un solo set de reglas para los 7 temas */
-  --accent-hover: color-mix(in srgb, var(--accent) 82%, black);
+  /* Derivados con color-mix(): un solo set de reglas para los 7 temas.
+     `--accent-hover` se deriva de `--accent-solid`, NO de `--accent`:
+     su único consumidor es `.btn-primary:hover`, y el botón es acento CON
+     texto blanco encima. Oscurecer `--accent` lo devolvía al dorado de
+     marca, que con blanco solo da 3,29:1 (warm-tech) y 4,00:1
+     (cronodisco) — el mismo trou que `--accent-solid` vino a arreglar,
+     retornando en el hover. */
+  --accent-hover: color-mix(in srgb, var(--accent-solid) 82%, black);
   --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
   --card-hover: color-mix(in srgb, var(--surface) 88%, var(--text));
   --glass-bg: color-mix(in srgb, var(--bg) 78%, transparent);
@@ -100,6 +115,12 @@
   --text-2: #9c8b74;
   --border: rgba(242, 232, 220, 0.12);
   --accent: #d9a441;
+  /* El dorado de la marca es para TEXTO sobre el negro: 8,05:1. Como
+     relleno, con el texto blanco del botón, se quedaba en 2,25:1 — y
+     eso era el «+» del dock, el único control para añadir una tarea,
+     más todos los «Siguiente →». Este latón profundo da 5,15:1 con
+     blanco y sigue siendo oro. */
+  --accent-solid: #8f6616;
   --accent-2: #c1502e;
   --radius: 12px;
   --radius-modal: 14px;
@@ -134,9 +155,16 @@
   --text-2: #8a93b8;
   --border: #3a4260;
   --accent: #e07856;
+  /* El coral de la marca es para TEXTO sobre el azul noche: 5,86:1. Como
+     relleno con el texto blanco del botón bajaba a 3,00:1. Esta
+     terracota da 4,79:1 con blanco y sigue siendo de la familia coral. */
+  --accent-solid: #bd5133;
   --accent-2: #7ba6a3;
   --radius: 999px;
   --radius-modal: 18px;
+  /* Las tejas del reloj son píldoras; un panel no. Sin esto la rejilla
+     del mes (726×400) se convertía en un balón de radio 200px. */
+  --radius-panel: 18px;
   --shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   --font-body: ui-sans-serif, system-ui, sans-serif;
   --font-display: Georgia, serif;
@@ -269,6 +297,15 @@
   margin-right: 8px;
   vertical-align: middle;
 }
+/* …pero solo donde puede estar «delante». En una fila (`.task-card`, o
+   un `.card` que es `flex items-center`) el `::before` es un ítem flex y
+   se alinea con el contenido. En un panel el contenedor es bloque: el
+   punto cae en una línea propia y deja 24px de hueco fantasma encima
+   del header (medido: la rejilla del mes pasaba de 376 a 400). Nunca
+   estuvo delante de nada ahí, solo ocupaba sitio. */
+[data-theme="cronodisco"] .card-panel::before {
+  display: none;
+}
 
 /* Gabinete: alfiler dorado sobre cada ficha + rotación.
    La rotación va SOLO en `.task-card` (las fichas de la lista, que es
@@ -340,7 +377,8 @@
   --accent: #6f5128;
   --accent-solid: #7a5a2e;
   --accent-soft: color-mix(in srgb, #6f5128 16%, transparent);
-  --accent-hover: color-mix(in srgb, #6f5128 85%, black);
+  /* Del relleno del botón (`--accent-solid`), no del oro de texto. */
+  --accent-hover: color-mix(in srgb, var(--accent-solid) 85%, black);
   --card-hover: color-mix(in srgb, #efe6d2 88%, #3a352a);
   /* Laca de granero: el rosa de «Eliminar» daba 2,17:1 sobre crema. */
   --danger: #9f1239;
@@ -445,6 +483,15 @@ body {
   }
   .card:hover {
     background: var(--card-hover);
+  }
+  /* Una tarjeta que NO es una fila de lista. Necesita su propia clase
+     porque `--radius` vale 999px en cronodisco (las fichas son tejas de
+     reloj) y ese radio se topa a la mitad de la altura en cuanto la
+     caja deja de ser una fila: la tarjeta se vuelve un balón y el
+     contenido de las esquinas se pinta fuera de ella. Va después de
+     `.card` a propósito — misma especificidad, gana por orden. */
+  .card-panel {
+    border-radius: var(--radius-panel);
   }
   .btn {
     @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-all duration-150 cursor-pointer;
