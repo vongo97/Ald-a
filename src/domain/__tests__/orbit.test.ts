@@ -15,6 +15,12 @@ import {
   tramoDe,
   tieneHora,
   arcSpan,
+  arcPath,
+  arcoDelDia,
+  minutosDeHoy,
+  fracDia,
+  desenrollar,
+  HORAS_LECTURA,
   packLanes,
   eyebrowDe,
   dyParaEtiquetas,
@@ -42,7 +48,7 @@ describe("toMin / degOf / polar", () => {
     expect(toMin("23:59")).toBe(1439);
   });
 
-  it("0° es mediodía arriba y 1440 min vuelven a 360°", () => {
+  it("0° es medianoche arriba y 1440 min vuelven a 360°", () => {
     expect(degOf(0)).toBe(0);
     expect(degOf(720)).toBe(180);
     expect(degOf(1440)).toBe(360);
@@ -384,5 +390,138 @@ describe("packLanes — estabilidad de los carriles al desplegar", () => {
       expect(l).toBeGreaterThanOrEqual(0);
       expect(l).toBeLessThan(CARRILES.length);
     }
+  });
+});
+
+describe("minutosDeHoy / fracDia — el reloj que sí marca la hora", () => {
+  /** Fecha local con hora fija (los constructores con 'Z' se correrían). */
+  const a = (h: number, m: number, s = 0) => new Date(2026, 8, 29, h, m, s);
+
+  it("son los minutos del día, con los segundos dentro", () => {
+    expect(minutosDeHoy(a(0, 0))).toBeCloseTo(0, 6);
+    expect(minutosDeHoy(a(9, 30))).toBeCloseTo(570, 6);
+    expect(minutosDeHoy(a(16, 0))).toBeCloseTo(960, 6);
+    expect(minutosDeHoy(a(23, 59, 59))).toBeCloseTo(1439 + 59 / 60, 6);
+  });
+
+  it("REGRESIÓN: NO se trunca al minuto (si no, el segundero da tirones)", () => {
+    // El bug era usar getHours()*60 + getMinutes: a las 22:39:30 salía
+    // siempre 22:39 y la aguja se quedaba quieta medio minuto.
+    expect(minutosDeHoy(a(22, 39, 30))).toBeCloseTo(1359 + 0.5, 6);
+    expect(minutosDeHoy(a(22, 39, 0))).toBeCloseTo(1359, 6);
+    expect(minutosDeHoy(a(22, 39, 30))).not.toBeCloseTo(1359, 3);
+  });
+
+  it("fracDia va de 0 a 1 a lo largo del día", () => {
+    expect(fracDia(a(0, 0))).toBeCloseTo(0, 6);
+    expect(fracDia(a(6, 0))).toBeCloseTo(0.25, 6);
+    expect(fracDia(a(12, 0))).toBeCloseTo(0.5, 6);
+    expect(fracDia(a(18, 0))).toBeCloseTo(0.75, 6);
+    expect(fracDia(a(23, 59, 59))).toBeLessThan(1);
+    expect(fracDia(a(23, 59, 59))).toBeGreaterThan(0.999);
+  });
+
+  it("la fracción de la tarde es la que la aguja muestra", () => {
+    // El arco del día y la aguja se calculan del MISMO número: si no,
+    // la punta del anillo y la aguja marcarían horas distintas.
+    const ahora = a(22, 39, 30);
+    expect(degOf(minutosDeHoy(ahora))).toBeCloseTo(360 * fracDia(ahora), 9);
+  });
+});
+
+describe("desenrollar — la aguja no retrocede al cambiar de día", () => {
+  it("el tick normal se respeta tal cual", () => {
+    expect(desenrollar(0, 0.0167)).toBeCloseTo(0.0167, 6);
+    expect(desenrollar(1359, 1359.5)).toBeCloseTo(1359.5, 6);
+  });
+
+  it("REGRESIÓN: cruzar medianoche no hace dar la vuelta a la aguja", () => {
+    // Sin esto la rotación salta de ~359,9° a 0° y la aguja gira en
+    // contra durante un segundo, una vez al día.
+    expect(desenrollar(1439.99, 0.01)).toBeCloseTo(1440.01, 6);
+    expect(degOf(desenrollar(1439.99, 0.01))).toBeGreaterThan(degOf(1439.99));
+  });
+
+  it("un retroceso pequeño (hora de verano) sí se respeta", () => {
+    // 60 min hacia atrás es un ajuste de reloj, no un cambio de día.
+    expect(desenrollar(600, 540)).toBe(540);
+  });
+});
+
+describe("HORAS_LECTURA — las cifras del disco", () => {
+  it("son las cuatro horas que anclan la lectura: 00 arriba, 06 dcha, 12 abajo, 18 izq", () => {
+    expect([...HORAS_LECTURA]).toEqual([0, 6, 12, 18]);
+    const [medianoche, seis, mediodia, seisPM] = HORAS_LECTURA.map((h) => polar(30, degOf(h * 60)));
+    expect(medianoche.x).toBeCloseTo(CX, 5);
+    expect(medianoche.y).toBeCloseTo(CY - 30, 5);
+    expect(seis.x).toBeCloseTo(CX + 30, 5);
+    expect(seis.y).toBeCloseTo(CY, 5);
+    expect(mediodia.x).toBeCloseTo(CX, 5);
+    expect(mediodia.y).toBeCloseTo(CY + 30, 5);
+    expect(seisPM.x).toBeCloseTo(CX - 30, 5);
+    expect(seisPM.y).toBeCloseTo(CY, 5);
+  });
+});
+
+describe("arcPath", () => {
+  it("une los dos extremos del arco con el barrido horario", () => {
+    const d = arcPath(24, 0, 90);
+    // 0° arriba (CX, CY-r) → 90° a la derecha (CX+r, CY)
+    expect(d.startsWith(`M ${CX.toFixed(2)} ${(CY - 24).toFixed(2)}`)).toBe(true);
+    expect(d.endsWith(`${(CX + 24).toFixed(2)} ${CY.toFixed(2)}`)).toBe(true);
+    expect(d).toContain("A 24 24 0 0 1");
+  });
+
+  it("usa el arco largo (flag 1) cuando el span pasa de media vuelta", () => {
+    expect(arcPath(24, 0, 179)).toContain("A 24 24 0 0 1");
+    expect(arcPath(24, 0, 181)).toContain("A 24 24 0 1 1");
+  });
+
+  it("no envuelve: `a` siempre es menor que `b` (así lo dan arcSpan y arcoDelDia)", () => {
+    // Si algún día alguien pasa el final antes que el principio, el path
+    // sale invertido en vez de dar la vuelta entera. Mejor que se note.
+    expect(arcPath(24, 300, 60)).toContain("A 24 24 0 0 1");
+  });
+
+  it("una vuelta completa no se dibuja (los extremos coinciden)", () => {
+    // Por eso el anillo del día se pinta como arco 0→ahora y la pista
+    // como un <circle> aparte: un path de 360° no pinta nada.
+    expect(arcPath(24, 0, 360)).toContain("A 24 24 0 1 1");
+    const p0 = polar(24, 0);
+    const p360 = polar(24, 360);
+    expect(p360.x).toBeCloseTo(p0.x, 6);
+    expect(p360.y).toBeCloseTo(p0.y, 6);
+  });
+});
+
+describe("arcoDelDia — el anillo del día transcurrido", () => {
+  it("va siempre de medianoche (0°) a la hora actual", () => {
+    expect(arcoDelDia(24, 960)).toEqual({ a: 0, b: 240 });
+    expect(arcoDelDia(24, 1359.5)?.b).toBeCloseTo(degOf(1359.5), 6);
+  });
+
+  it("a mediodía está medio lleno y a las 23:59 casi entero", () => {
+    expect(arcoDelDia(24, 720)!.b).toBeCloseTo(180, 6);
+    expect(arcoDelDia(24, 720)!.b / 360).toBeCloseTo(0.5, 6);
+    expect(arcoDelDia(24, 1439)!.b / 360).toBeGreaterThan(0.999);
+  });
+
+  it("antes de medianoche no pinta nada (y un radio 0 tampoco)", () => {
+    expect(arcoDelDia(24, 0)).toBeNull();
+    expect(arcoDelDia(24, -5)).toBeNull();
+    expect(arcoDelDia(0, 600)).toBeNull();
+  });
+
+  it("nunca pasa de la vuelta completa aunque le den más de 24 h", () => {
+    expect(arcoDelDia(24, 5000)!.b).toBe(360);
+    expect(arcoDelDia(24, 1440)!.b).toBe(360);
+  });
+
+  it("justo pasada medianoche se ve un punto, no un arco de 0°", () => {
+    // Con butt un span de 0 no deja marca: el día recién empezado
+    // tiene que verse, aunque sea mínimo.
+    const dia = arcoDelDia(24, 0.05);
+    expect(dia).not.toBeNull();
+    expect(dia!.b).toBeGreaterThan(0);
   });
 });

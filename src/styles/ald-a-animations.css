@@ -6,7 +6,11 @@
    con el original, todas marcadas con «ADAPTACIÓN», son correcciones de
    integración con nuestro markup/React:
    · .cd-needle deja de girar en bucle de 60 s (demo): la posición de la
-     hora real la pone DayOrbit.tsx vía --needle-rot.
+     hora real la pone DayOrbit.tsx vía --needle-rot, con tick propio de
+     1 s y transición lineal para que el segundero sea continuo.
+   · .cd-ticks deja de girar en bucle de 240 s (una vuelta = «un día»):
+     con las tareas ancladas a su hora, las marcas también se quedan
+     fijas; si no, el disco se desalineaba en minutos.
    · Los hover de task-card en editorial/warm-tech llevan !important:
      la animación de entrada con `forwards` tiene más prioridad que una
      declaración normal y anulaba el lift del hover.
@@ -230,24 +234,43 @@
 
 /* ============================================================
    1 · CRONODISCO
-   Sensación: un instrumento vivo. El tiempo gira y las tareas laten.
+   Sensación: un instrumento vivo. Las tareas laten; el día avanza.
    Las clases .cd-* viven en el SVG de DayOrbit.tsx.
    ============================================================ */
 
-/* Anillo exterior de ticks: rotación lenta continua (el día transcurre) */
-[data-theme="cronodisco"] .cd-ticks {
-  transform-origin: 115px 115px;
-  animation: cd-spin 240s linear infinite;   /* 1 vuelta = "un día" */
-}
-@keyframes cd-spin { to { transform: rotate(360deg); } }
+/* El anillo de marcas NO gira. Antes tenía `animation: cd-spin 240s`
+   (una vuelta por "día") y las horas acababan desalineadas de las
+   tareas en minutos: si una tarea está anclada a las 16:00, su arco
+   no se mueve, y entonces las 16:00 tampoco pueden moverse. El disco
+   se queda quieto y lo que gira es el día (aguja + arco de avance). */
 
-/* ADAPTACIÓN: la aguja ya no gira en bucle de 60 s (era una demo que
-   daba vértigo). DayOrbit pone --needle-rot con la hora real y aquí
-   solo se interpola el movimiento cuando cambia el minuto. */
+/* Cifras 00/06/12/18: `fill` y `letter-spacing` van aquí porque las
+   reglas de CSS ganan a los atributos de presentación del SVG. */
+[data-theme="cronodisco"] .cd-cifras {
+  fill: var(--text-2);
+  font-weight: 500;
+  pointer-events: none;
+}
+
+/* Anillo del día: la pista (borde tenue) y el relleno (acento). Los
+   extremos van exactos con linecap butt — sin desviar la hora. */
+[data-theme="cronodisco"] .cd-dia-pista {
+  stroke: var(--border);
+}
+[data-theme="cronodisco"] .cd-dia {
+  stroke: var(--accent);
+  stroke-linecap: butt;
+}
+
+/* ADAPTACIÓN: la aguja no gira en bucle de 60 s (era una demo que daba
+   vértigo). DayOrbit pone --needle-rot con la hora real y su propio
+   tick de 1 s; la transición lineal de 1 s encadena los pasos, así que
+   el segundero se ve continuo. */
 [data-theme="cronodisco"] .cd-needle {
   transform-origin: 115px 115px;
   transform: rotate(var(--needle-rot, 0deg));
-  transition: transform .6s cubic-bezier(.3,.9,.4,1);
+  transition: transform 1s linear;
+  pointer-events: none;
 }
 
 /* Arcos de tarea: laten suavemente como señales.

@@ -69,7 +69,7 @@ export default function ProfileQuestionnaire({ onComplete, canCancel, onCancel }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div
-        className="card w-full max-w-lg p-6 shadow-2xl"
+        className="modal-card w-full max-w-lg p-6 shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-label="Cuestionario de perfil"

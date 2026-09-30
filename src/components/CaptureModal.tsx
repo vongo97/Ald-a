@@ -170,7 +170,7 @@ export default function CaptureModal() {
     >
       <div
         ref={dialogRef}
-        className="card w-full max-w-xl p-4 shadow-2xl"
+        className="modal-card w-full max-w-xl p-4 shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-label="Nueva tarea"

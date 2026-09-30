@@ -321,7 +321,7 @@ export default function DayPlanModal({ open, onClose }: DayPlanModalProps) {
     >
       <div
         ref={dialogRef}
-        className="card w-full max-w-2xl p-4 shadow-2xl"
+        className="modal-card w-full max-w-2xl p-4 shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-label="Planificar día con IA"

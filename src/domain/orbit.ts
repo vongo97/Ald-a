@@ -12,9 +12,12 @@
  *  - El «despliegue en el reloj» (pintarReloj): qué tarea se pinta, con
  *    qué raíz/color y si está abierta — las raíces siempre; el desglose
  *    solo cuando su padre está desplegado.
+ *  - El reloj de verdad: minutos del día con segundos, fracción de día
+ *    transcurrida y el arco 0:00→ahora que llena el anillo interior.
  *
- * Convenciones: 0° = mediodía arriba, giro horario; centro 115,115
- * (coincide con los transform-origin del CSS cd-ticks / cd-needle).
+ * Convenciones: 0° = MEDIANOCHE arriba, giro horario, 24 h por vuelta
+ * (06:00 a la derecha, 12:00 abajo, 18:00 a la izquierda); centro
+ * 115,115 (coincide con los transform-origin de cd-ticks / cd-needle).
  */
 
 import type { Task } from "@/domain/types";
@@ -30,6 +33,12 @@ export const CARRILES = [72, 61, 50, 39];
 export const SW_ARCO = 10;
 /** Grosor de los arcos-hijo (el desglose desplegado en el reloj). */
 export const SW_HIJO = 4;
+/**
+ * Grosor del arco del día transcurrido. Va por dentro del carril más
+ * profundo (`CARRILES[3] = 39`) para no competir con las tareas: es la
+ * única pista de tiempo que se mueve, así que se lee al instante.
+ */
+export const SW_DIA = 2;
 /**
  * Zona de toque (stroke transparente) de un arco raíz. Debe ser MENOR
  * que 2× la separación entre carriles (11 px): con 24 (±12) el puntero
@@ -48,6 +57,37 @@ export const toMin = (hhmm: string): number =>
   parseInt(hhmm.slice(0, 2), 10) * 60 + parseInt(hhmm.slice(3), 10);
 
 export const degOf = (m: number): number => (m / 1440) * 360;
+
+/**
+ * Minutos transcurridos del día, con segundos para que la aguja se
+ * mueva de forma continua (si se trunca al minuto, el segundero da
+ * tirones). Es el reloj del SEGUNDO ÚNICO que se mueve en el disco.
+ */
+export const minutosDeHoy = (d: Date): number =>
+  d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+
+/** Fracción del día ya transcurrida (0…1): la que llena el anillo del día. */
+export const fracDia = (d: Date): number => minutosDeHoy(d) / 1440;
+
+/**
+ * Deshace el salto de medianoche para que la aguja no dé la vuelta
+ * entera hacia atrás.
+ *
+ * A las 00:00 los minutos del día pasan de ~1440 a ~0, y la rotación
+ * saltaría de 359,9° a 0°: la aguja giraría en contra durante un
+ * segundo, una vez al día. Si el retroceso es pequeño (salto de hora de
+ * verano, un reloj que se corrige a mano) se respeta tal cual.
+ */
+export function desenrollar(anterior: number, actual: number): number {
+  return anterior - actual > 720 ? actual + 1440 : actual;
+}
+
+/**
+ * Las cuatro horas que se numeran en la esfera. Con 0° = medianoche
+ * arriba y giro horario: 00 arriba, 06 a la derecha, 12 abajo,
+ * 18 a la izquierda. Sin ellas el disco no se puede leer.
+ */
+export const HORAS_LECTURA = [0, 6, 12, 18] as const;
 
 export const polar = (r: number, deg: number): { x: number; y: number } => ({
   x: CX + r * Math.cos(((deg - 90) * Math.PI) / 180),
@@ -93,6 +133,34 @@ export function arcSpan(r: number, m1: number, m2: number, sw = SW_ARCO): { a: n
     b = mid + SPAN_MIN / 2;
   }
   return { a, b };
+}
+
+/**
+ * Path SVG del arco de radio r que va del ángulo `a` al `b` (giro horario).
+ * Espera `a < b` — quien lo llama (`arcSpan`, `arcoDelDia`) ya entrega
+ * los extremos ordenados, y un par invertido saldría como arco corto.
+ */
+export function arcPath(r: number, a: number, b: number): string {
+  const p1 = polar(r, a);
+  const p2 = polar(r, b);
+  const grande = b - a > 180 ? 1 : 0;
+  return `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A ${r} ${r} 0 ${grande} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+}
+
+/**
+ * Arco del día transcurrido: de las 0:00 a `minutos`, en el radio r.
+ *
+ * A diferencia de los arcos de tarea (que usan `arcSpan`), aquí los
+ * extremos van EXACTOS: se pinta con `stroke-linecap: butt`, así que lo
+ * visible termina justo en la hora actual y empieza justo en medianoche
+ * — que es lo que hace legible el anillo. Si el día aún no ha empezado
+ * (o ya se agotó) devuelve null y no se pinta nada.
+ */
+export function arcoDelDia(r: number, minutos: number, sw = SW_DIA): { a: number; b: number } | null {
+  if (!(r > 0)) return null;
+  const b = degOf(Math.min(1440, Math.max(0, minutos)));
+  if (b <= 0) return null;
+  return { a: 0, b: Math.max(b, SPAN_MIN) };
 }
 
 /**

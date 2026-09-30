@@ -32,6 +32,12 @@
   --accent: #d9a441;
   --accent-2: #c1502e;
   --radius: 12px;
+  /* Los overlays (modales, avisos) NO heredan `--radius`: en cronodisco
+     es 999px y el modal se convertía en una píldora gigante. Además los
+     temas añaden adornos a `.card` (el punto coral de cronodisco, el
+     alfiler de gabinete, la rotación de las cards…) pensados para
+     tarjetas de lista, no para un diálogo. Ver `.modal-card` más abajo. */
+  --radius-modal: 12px;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Fraunces", Georgia, serif;
@@ -69,6 +75,7 @@
   --accent: #c1502e;
   --accent-2: #4a5228;
   --radius: 4px;
+  --radius-modal: 4px;
   --shadow: 3px 3px 0 rgba(214, 140, 60, 0.28);
   --font-body: Georgia, "Times New Roman", serif;
   --font-display: Georgia, serif;
@@ -84,6 +91,7 @@
   --accent: #d9a441;
   --accent-2: #c1502e;
   --radius: 12px;
+  --radius-modal: 14px;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   --font-body: ui-sans-serif, system-ui, sans-serif;
   --font-display: "Fraunces", Georgia, serif;
@@ -99,6 +107,9 @@
   --accent: #a23b2d;
   --accent-2: #3a506b;
   --radius: 14px 4px 12px 5px / 5px 12px 4px 14px;
+  /* La card de digital-craft va «dibujada a mano» con radios desiguales;
+     en un diálogo se lee como un descuido, así que el modal es limpio. */
+  --radius-modal: 10px;
   --shadow: 2px 3px 0 rgba(58, 80, 107, 0.2);
   --font-body: ui-sans-serif, system-ui, sans-serif;
   --font-display: Georgia, serif;
@@ -114,6 +125,7 @@
   --accent: #e07856;
   --accent-2: #7ba6a3;
   --radius: 999px;
+  --radius-modal: 18px;
   --shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   --font-body: ui-sans-serif, system-ui, sans-serif;
   --font-display: Georgia, serif;
@@ -129,6 +141,7 @@
   --accent: #b08d57;
   --accent-2: #8a6a3a;
   --radius: 3px;
+  --radius-modal: 4px;
   --shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
   --font-body: ui-sans-serif, system-ui, sans-serif;
   --font-display: Georgia, serif;
@@ -144,6 +157,7 @@
   --accent: #a4442e;
   --accent-2: #8c6d3f;
   --radius: 6px;
+  --radius-modal: 8px;
   --shadow: 0 1px 0 rgba(44, 38, 32, 0.12);
   --font-body: ui-sans-serif, system-ui, sans-serif;
   --font-display: Georgia, serif;
@@ -159,6 +173,7 @@
   --accent: #b3392c;
   --accent-2: #26231c;
   --radius: 4px;
+  --radius-modal: 4px;
   --shadow: none;
   --font-body: ui-sans-serif, system-ui, sans-serif;
   --font-display: Georgia, serif;
@@ -254,6 +269,18 @@
   border-radius: 50%;
   background: radial-gradient(circle at 35% 35%, #d8b878, #8a6a3a);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+/* El modal sí necesita el texto marrón: en gabinete `--fg` es crema,
+   igual que `--card-bg`, así que sin esto sería crema sobre crema.
+   `--fg`/`--fg-muted` se redeclaran en el propio modal (y heredan a
+   sus hijos) para que las clases `.text-primary` / `.text-muted` de
+   dentro también se lean. No lleva alfiler ni rotación: eso es de las
+   fichas de la lista, no de un diálogo. */
+[data-theme="gabinete"] .modal-card {
+  background: var(--surface);
+  color: #3a352a;
+  --fg: #3a352a;
+  --fg-muted: #6d6144;
 }
 [data-theme="gabinete"] h1 {
   font-style: italic;
@@ -423,6 +450,31 @@ body {
   .chip {
     @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
   }
+}
+
+/* ================================================================
+   MODALES Y AVISOS
+   Clase aparte de `.card`, y deliberadamente FUERA de @layer
+   components para que gane a las reglas de tema.
+
+   Por qué: `.card` es la tarjeta de la lista de tareas, y cada tema le
+   cuelga adornos pensados para ella — el punto coral delante (cronodisco),
+   el alfiler dorado encima (gabinete), la rotación alterna (digital-craft,
+   gabinete), la transparencia de pincelada (tinta-viva) — además de
+   heredar `--radius: 999px` en cronodisco, que convertía el diálogo en
+   una píldora gigante, y el `:hover`, que cambiaba de fondo al pasar el
+   ratón por encima. Un modal no es una tarjeta de lista: no lleva
+   alfiler, no rota, y se queda quieto bajo el puntero.
+   ================================================================ */
+.modal-card {
+  @apply border;
+  background: var(--card-bg);
+  color: var(--fg);
+  border-color: var(--card-border);
+  border-radius: var(--radius-modal, 12px);
+  /* Sin `box-shadow`: cada modal trae su `shadow-2xl`/`shadow-lg`, que
+     vive en @layer utilities y por tanto gana aquí. Si esta regla
+     declarara la sombra del tema, se comería la del diálogo. */
 }
 
 /* Scrollbar discreto */

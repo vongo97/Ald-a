@@ -85,7 +85,7 @@ export default function BreakdownModal({
     >
       <div
         ref={dialogRef}
-        className="card w-full max-w-lg p-5 shadow-2xl"
+        className="modal-card w-full max-w-lg p-5 shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-label="Revisar desglose de tarea"

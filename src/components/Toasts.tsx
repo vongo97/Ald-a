@@ -9,7 +9,7 @@ function ToastItem({ id, message, undo }: { id: string; message: string; undo?: 
   }, [id, dismiss]);
 
   return (
-    <div className="card pointer-events-auto flex items-center gap-3 px-4 py-2.5 shadow-lg">
+    <div className="modal-card pointer-events-auto flex items-center gap-3 px-4 py-2.5 shadow-lg">
       <span className="text-sm text-primary">{message}</span>
       {undo && (
         <button
