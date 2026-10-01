@@ -257,26 +257,6 @@ export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
 
     // 4) Fusionar dentro de una transacción.
     await db.transaction("rw", db.tasks, db.projects, db.tombstones, async () => {
-      // Aplicar tumbas remotas: elimina localmente si la tumba es más reciente.
-      for (const raw of (tombData ?? []) as { id: string; kind: string; updated_at: string }[]) {
-        const remoteTime = timestamp(raw.updated_at);
-        if (raw.kind === "tasks") {
-          const local = await db.tasks.get(raw.id);
-          if (local && (!local.deletedAt || timestamp(local.deletedAt) < remoteTime)) {
-            await db.tasks.update(raw.id, { deletedAt: raw.updated_at });
-            remoteDeletes++;
-          }
-        } else if (raw.kind === "projects") {
-          const local = await db.projects.get(raw.id);
-          if (local && (!local.deletedAt || timestamp(local.deletedAt) < remoteTime)) {
-            await db.projects.update(raw.id, { deletedAt: raw.updated_at });
-            remoteDeletes++;
-          }
-        }
-        // Guardamos la tumba local para que el próximo push la re-envíe si hace falta.
-        await db.tombstones.put({ id: raw.id, kind: raw.kind as "tasks" | "projects", updatedAt: raw.updated_at });
-      }
-
       for (const raw of pData ?? []) {
         const remote = stripRemote<Project>(raw as Record<string, unknown>);
         const local = await db.projects.get(remote.id);
@@ -296,6 +276,37 @@ export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
         } else if (local && !local.updatedAt) {
           await db.tasks.update(local.id, { updatedAt: stampNow() });
         }
+      }
+
+      // Las tumbas van DESPUÉS de las filas, no antes.
+      //
+      // Antes se aplicaban primero, detrás de una guarda `if (local && …)`. En
+      // un dispositivo limpio no hay `local`, así que la guarda no se cumplía
+      // y el borrado se descartaba entero; acto seguido la fila llegaba viva
+      // y `mergeDecision(undefined, remote)` la daba por buena. Resultado: la
+      // tarea que habías borrado en otro teléfono reaparecía como activa.
+      //
+      // Con este orden, cuando llega la fila ya está en local y la tumba sí
+      // puede marcarla. También repara sola las filas que quedaron con
+      // `deleted_at = null` en la nube mientras el protocolo estaba a medias:
+      // su tumba sigue ahí y ahora sí llega a tiempo.
+      for (const raw of (tombData ?? []) as { id: string; kind: string; updated_at: string }[]) {
+        const remoteTime = timestamp(raw.updated_at);
+        if (raw.kind === "tasks") {
+          const local = await db.tasks.get(raw.id);
+          if (local && (!local.deletedAt || timestamp(local.deletedAt) < remoteTime)) {
+            await db.tasks.update(raw.id, { deletedAt: raw.updated_at });
+            remoteDeletes++;
+          }
+        } else if (raw.kind === "projects") {
+          const local = await db.projects.get(raw.id);
+          if (local && (!local.deletedAt || timestamp(local.deletedAt) < remoteTime)) {
+            await db.projects.update(raw.id, { deletedAt: raw.updated_at });
+            remoteDeletes++;
+          }
+        }
+        // Guardamos la tumba local para que el próximo push la re-envíe si hace falta.
+        await db.tombstones.put({ id: raw.id, kind: raw.kind as "tasks" | "projects", updatedAt: raw.updated_at });
       }
     });
 
@@ -320,28 +331,61 @@ export async function autoPushTask(task: Task): Promise<void> {
   await autoPushTasks([task]);
 }
 
-/** Sube la tumba de una tarea a Supabase (señal de borrado). */
-export async function autoPushDeleteTask(id: string): Promise<void> {
+/**
+ * Protocolo de borrado en la nube: SUBE LA FILA con `deleted_at` Y ESCRIBE LA
+ * TUMBA. Son las dos mitades, y el motivo es el espejo exacto del que ya
+ * documenta `autoRestoreRows`:
+ *
+ *  - Solo la tumba, que es lo que pasaba antes: la fila seguía diciendo «viva»
+ *    en la nube. Un dispositivo que aún no tenía la tarea se la bajaba tal
+ *    cual, `mergeDecision` veía `local === undefined` y devolvía
+ *    `take-remote`, así que la tarea borrada en otro dispositivo reaparecía
+ *    como activa. La tombstone no cumplía su función porque el pull la aplicaba
+ *    antes de que existiera la fila que pretendía marcar.
+ *  - Solo la fila: si la nube pierde la fila, el borrado no deja ni rastro.
+ *
+ * Aquí se mandan las filas enteras a propósito. Un upsert con solo `id` y
+ * `deleted_at` crearía la fila con el resto de columnas nulas, y una tarea sin
+ * título ni fecha es peor que una tarea que no existe.
+ *
+ * Silenciosa si no hay sesión: lo local ya quedó borrado.
+ */
+async function autoPushDeletedRows(
+  table: "tasks" | "projects",
+  kind: "tasks" | "projects",
+  rows: Array<Record<string, unknown>>,
+): Promise<void> {
+  if (rows.length === 0) return;
   const userId = await sessionUserId();
   if (!userId) return;
+  // Una sola fecha para las dos mitades: fila y tumba tienen que contar la
+  // misma historia. Con fechas distintas, el pull podría aplicar el borrado
+  // desde una y luego dejar que la otra lo revirtiera.
   const now = stampNow();
-  const { error } = await supabase
-    .from("tombstones")
-    // onConflict explícito: la PK es compuesta (kind, id) desde la 0009.
-    .upsert({ id, kind: "tasks", user_id: userId, updated_at: now }, { onConflict: "id,kind" });
-  if (error) console.error("AutoSync delete error (Task tombstone):", error);
+  const [{ error: rowErr }, { error: tombErr }] = await Promise.all([
+    supabase
+      .from(table)
+      .upsert(rows.map((r) => ({ ...toRemote(r), deleted_at: now, user_id: userId }))),
+    supabase
+      .from("tombstones")
+      .upsert(
+        rows.map((r) => ({ id: r.id as string, kind, user_id: userId, updated_at: now })),
+        // onConflict explícito: la PK es compuesta (kind, id) desde la 0009.
+        { onConflict: "id,kind" },
+      ),
+  ]);
+  if (rowErr) console.error(`AutoSync delete error (${table} rows):`, rowErr);
+  if (tombErr) console.error(`AutoSync delete error (${kind} tombstones):`, tombErr);
 }
 
-/** Sube la tumba de un proyecto a Supabase (señal de borrado). */
-export async function autoPushDeleteProject(id: string): Promise<void> {
-  const userId = await sessionUserId();
-  if (!userId) return;
-  const now = stampNow();
-  const { error } = await supabase
-    .from("tombstones")
-    // onConflict explícito: la PK es compuesta (kind, id) desde la 0009.
-    .upsert({ id, kind: "projects", user_id: userId, updated_at: now }, { onConflict: "id,kind" });
-  if (error) console.error("AutoSync delete error (Project tombstone):", error);
+/** Marca el borrado de un lote de tareas en la nube (fila + tumba). */
+export async function autoPushDeletedTasks(tasks: Task[]): Promise<void> {
+  await autoPushDeletedRows("tasks", "tasks", tasks as unknown as Array<Record<string, unknown>>);
+}
+
+/** Marca el borrado de un proyecto en la nube (fila + tumba). */
+export async function autoPushDeletedProjects(projects: Project[]): Promise<void> {
+  await autoPushDeletedRows("projects", "projects", projects as unknown as Array<Record<string, unknown>>);
 }
 
 /** Sube (Upsert) un proyecto a Supabase silenciosamente en segundo plano. */

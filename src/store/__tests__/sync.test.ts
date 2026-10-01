@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import type { Task } from "@/domain/types";
 
 // ─── Estado compartido de los mocks (hoisted para que esté disponible en vi.mock) ───
 const { mockData, mockSession, mockDb } = vi.hoisted(() => {
@@ -123,7 +124,7 @@ vi.mock("../useStore", () => ({
 }));
 
 // Importar DESPUÉS de los mocks
-import { toRemote, stripRemote, needsPush, pullAndSyncFromSupabase } from "../sync";
+import { toRemote, stripRemote, needsPush, pullAndSyncFromSupabase, autoPushDeletedTasks } from "../sync";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function resetAll() {
@@ -138,6 +139,26 @@ function resetAll() {
 }
 
 beforeEach(resetAll);
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function makeTask(over: Partial<Task> = {}): Task {
+  return {
+    id: "t1",
+    title: "Tarea",
+    labels: [],
+    priority: 3,
+    importance: 3,
+    status: "todo",
+    order: 0,
+    createdAt: "2026-01-01T00:00:00Z",
+    ...over,
+  };
+}
+
+/** El almacén del mock guarda filas genéricas; el dominio usa `Task`. */
+function stored(row: unknown): Record<string, unknown> {
+  return row as Record<string, unknown>;
+}
 
 // ─── toRemote: camelCase → snake_case ────────────────────────────────────────
 describe("toRemote", () => {
@@ -295,6 +316,56 @@ describe("pullAndSyncFromSupabase", () => {
     expect(mockDb._tables.tombstones.size).toBe(1);
   });
 
+  it("REGRESIÓN: la tumba también vale en un dispositivo que no tenía la tarea", async () => {
+    // Este es el estado que dejó el protocolo de borrado a medias: la fila
+    // viva en la nube y su tombstone al lado. Nada en local → dispositivo
+    // limpio, el caso de un móvil nuevo.
+    mockData.tasks.push({
+      id: "t1",
+      title: "Borrada en el otro dispositivo",
+      updated_at: "2026-01-01T00:00:00Z",
+      deleted_at: null,
+    });
+    mockData.tombstones.push({
+      id: "t1",
+      kind: "tasks",
+      user_id: "user-1",
+      updated_at: "2026-01-02T00:00:00Z",
+    });
+
+    const result = await pullAndSyncFromSupabase();
+
+    // La fila se baja (no hay de dónde sacar el contenido si no) pero tiene
+    // que bajar YA marcada como borrada. Antes del arreglo se bajaba viva y
+    // la tarea que habías borrado en otro teléfono aparecía como activa.
+    const local = mockDb._tables.tasks.get("t1");
+    expect(local).toBeDefined();
+    expect(local!.deletedAt).toBe("2026-01-02T00:00:00Z");
+    expect(result!.remoteDeletes).toBe(1);
+  });
+
+  it("REGRESIÓN: tampoco resucita un proyecto borrado en otro dispositivo", async () => {
+    mockData.projects.push({
+      id: "p1", name: "Proyecto caído", updated_at: "2026-01-01T00:00:00Z", deleted_at: null,
+    });
+    mockData.tombstones.push({
+      id: "p1", kind: "projects", user_id: "user-1", updated_at: "2026-01-02T00:00:00Z",
+    });
+
+    const result = await pullAndSyncFromSupabase();
+
+    expect(mockDb._tables.projects.get("p1")!.deletedAt).toBe("2026-01-02T00:00:00Z");
+    expect(result!.remoteDeletes).toBe(1);
+  });
+
+  it("una tarea sin tombstone se baja normal (el arreglo no borra de más)", async () => {
+    mockData.tasks.push({ id: "t1", title: "Viva", updated_at: "2026-01-01T00:00:00Z" });
+
+    await pullAndSyncFromSupabase();
+
+    expect(mockDb._tables.tasks.get("t1")!.deletedAt).toBeUndefined();
+  });
+
   it("NO aplica una tumba más vieja que el borrado local", async () => {
     // Local: ya borrada hace más tiempo
     mockDb._tables.tasks.set("t1", { id: "t1", updatedAt: "2026-01-01T00:00:00Z", deletedAt: "2026-01-03T00:00:00Z" });
@@ -383,5 +454,89 @@ describe("pullAndSyncFromSupabase", () => {
     expect(result!.pulledProjects).toBe(1);
     expect(mockData.projects).toHaveLength(2);
     expect(mockDb._tables.projects.size).toBe(2);
+  });
+});
+
+// ─── autoPushDeletedTasks: las dos mitades del protocolo de borrado ──────────
+describe("autoPushDeletedTasks", () => {
+  it("sube la fila con deleted_at Y escribe la tumba", async () => {
+    await autoPushDeletedTasks([makeTask({ id: "t1", title: "Borrada" })]);
+
+    // Mitad 1: la fila existe y dice que está borrada.
+    expect(mockData.tasks).toHaveLength(1);
+    expect(mockData.tasks[0].id).toBe("t1");
+    expect(mockData.tasks[0].deleted_at).toBeTruthy();
+
+    // Mitad 2: la tumba. Sin ella, la fila podría perderse y el borrado
+    // con ella.
+    expect(mockData.tombstones).toHaveLength(1);
+    expect(mockData.tombstones[0]).toMatchObject({
+      id: "t1", kind: "tasks", user_id: "user-1",
+    });
+
+    // Y las dos mitades cuentan la MISMA historia, no dos fechas distintas.
+    expect(mockData.tombstones[0].updated_at).toBe(mockData.tasks[0].deleted_at);
+  });
+
+  it("manda la fila entera, no un upsert parcial", async () => {
+    // Un upsert con solo id+deleted_at crearía una fila sin título ni estado.
+    await autoPushDeletedTasks([makeTask({ id: "t1", title: "Importa", labels: ["casa"] })]);
+
+    expect(mockData.tasks[0].title).toBe("Importa");
+    expect(mockData.tasks[0].labels).toEqual(["casa"]);
+    expect(mockData.tasks[0].status).toBe("todo");
+  });
+
+  it("marca la fila con user_id propio (RLS no lo perdona si se olvida)", async () => {
+    await autoPushDeletedTasks([makeTask({ id: "t1" })]);
+
+    expect(mockData.tasks[0].user_id).toBe("user-1");
+    expect(mockData.tombstones[0].user_id).toBe("user-1");
+  });
+
+  it("lote: una tumba por tarea, todas con su id", async () => {
+    await autoPushDeletedTasks([
+      makeTask({ id: "t1" }),
+      makeTask({ id: "t2" }),
+      makeTask({ id: "t3" }),
+    ]);
+
+    expect(mockData.tombstones.map((t) => t.id).sort()).toEqual(["t1", "t2", "t3"]);
+    expect(mockData.tasks).toHaveLength(3);
+    for (const row of mockData.tasks) expect(row.deleted_at).toBeTruthy();
+  });
+
+  it("sin sesión no sube nada", async () => {
+    mockSession.userId = null;
+
+    await autoPushDeletedTasks([makeTask({ id: "t1" })]);
+
+    expect(mockData.tasks).toHaveLength(0);
+    expect(mockData.tombstones).toHaveLength(0);
+  });
+
+  it("lote vacío no hace nada", async () => {
+    await autoPushDeletedTasks([]);
+
+    expect(mockData.tasks).toHaveLength(0);
+    expect(mockData.tombstones).toHaveLength(0);
+  });
+
+  it("el ciclo completo no resucita: borrar → nube → dispositivo limpio", async () => {
+    // 1) El dispositivo A tiene una tarea y la borra.
+    mockDb._tables.tasks.set("t1", stored(makeTask({ id: "t1", title: "Ciclo completo" })));
+    await autoPushDeletedTasks([mockDb._tables.tasks.get("t1") as unknown as Task]);
+
+    // 2) El dispositivo B arranca vacío y sincroniza.
+    mockDb._tables.tasks.clear();
+    const result = await pullAndSyncFromSupabase();
+
+    // 3) B tiene la fila, pero borrada: no aparece como activa.
+    expect(mockDb._tables.tasks.get("t1")!.deletedAt).toBeTruthy();
+    // Y la tumba no tuvo nada que hacer (remoteDeletes 0): la fila ya llegó
+    // diciendo «borrada». Ese es el objetivo del protocolo completo. Antes
+    // el contador también era 0, pero la tarea aparecía como activa, que
+    // es justo el bug.
+    expect(result!.remoteDeletes).toBe(0);
   });
 });

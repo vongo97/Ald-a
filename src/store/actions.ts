@@ -3,7 +3,7 @@ import type { ParsedCapture } from "@/parsers/capture";
 import type { Project, Task } from "@/domain/types";
 import { nextOccurrence } from "@/domain/recurrence";
 import { toISODate, parseISODate } from "@/domain/dateutils";
-import { autoPushTask, autoPushProject, autoPushTasks, autoPushDeleteTask, autoPushDeleteProject, autoRestoreTasks, autoRestoreProjects } from "./sync";
+import { autoPushTask, autoPushProject, autoPushTasks, autoPushDeletedTasks, autoPushDeletedProjects, autoRestoreTasks, autoRestoreProjects } from "./sync";
 import { timeToMin } from "@/domain/schedule";
 import { randomColor } from "@/domain/color";
 import { restoreSet } from "@/domain/trash";
@@ -33,8 +33,10 @@ export async function deleteProject(id: string): Promise<void> {
     await db.tombstones.put({ id, kind: "projects", updatedAt: now });
   });
 
-  // La nube también se entera vía la tumba.
-  void autoPushDeleteProject(id);
+  // El proyecto se sube borrado (fila + tumba). Las tareas que colgaban de él
+  // se desenganchan, no se borran: van vivas, con `projectId` vacío.
+  const gone = await db.projects.get(id);
+  if (gone) void autoPushDeletedProjects([gone]);
   const detached: Task[] = [];
   for (const taskId of affectedIds) {
     const fresh = await db.tasks.get(taskId);
@@ -137,8 +139,14 @@ export async function deleteTask(id: string): Promise<void> {
     }
   });
 
-  // La nube también se entera vía las tumbas.
-  for (const t of toDelete) void autoPushDeleteTask(t.id);
+  // La nube se entera por las DOS vías del protocolo de borrado: la fila con
+  // `deleted_at` puesto y la tumba. Subiendo solo la tumba, la fila seguía
+  // «viva» en el servidor y el pull la resucitaba en un dispositivo limpio.
+  // Ver `autoPushDeletedRows`.
+  const deleted = (await Promise.all(toDelete.map((t) => db.tasks.get(t.id)))).filter(
+    (r): r is Task => Boolean(r),
+  );
+  void autoPushDeletedTasks(deleted);
 }
 
 /**
