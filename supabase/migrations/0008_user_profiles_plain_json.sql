@@ -1,41 +1,41 @@
 -- ============================================================================
--- Migración 0008 — El perfil deja de fingir que está cifrado
+-- Migracion 0008 - El perfil deja de fingir que esta cifrado
 --
--- QUÉ CORRIGE:
---   La migración 0006 creó `user_profiles(encrypted text)` y el cliente lo
+-- QUE CORRIGE:
+--   La migracion 0006 creo `user_profiles(encrypted text)` y el cliente lo
 --   "cifraba" con AES-GCM derivando la clave de `${user_id}:${salt}`. Pero:
 --
---     * `user_id` es la CLAVE PRIMARIA de la propia tabla → está en el dump,
+--     * `user_id` es la CLAVE PRIMARIA de la propia tabla -> esta en el dump,
 --       no es un secreto.
---     * El salt (`"ald-a-profile-v1"`) está hardcodeado en el código fuente.
+--     * El salt (`"ald-a-profile-v1"`) esta hardcodeado en el codigo fuente.
 --
---   Resultado: cualquiera con acceso de lectura a la base podía descifrar
+--   Resultado: cualquiera con acceso de lectura a la base podia descifrar
 --   todos los perfiles. Los 100.000 iteraciones de PBKDF2 solo retrasaban el
 --   script unos milisegundos. Era confidencialidad aparente, no real.
 --
---   Además el perfil son horas de sueño, cronotipo y rutina: es MENOS
+--   Ademas el perfil son horas de sueno, cronotipo y rutina: es MENOS
 --   sensible que las tareas, que ya se guardan en texto plano bajo RLS.
 --   Cifrar solo el perfil era incoherente.
 --
--- QUÉ HACE:
---   Renombra `encrypted` → `data` y guarda el perfil como JSON claro.
+-- QUE HACE:
+--   Renombra `encrypted` -> `data` y guarda el perfil como JSON claro.
 --   La frontera de confianza pasa a ser RLS (`id = auth.uid()`), igual que en
 --   `tasks`, `projects` y `tombstones`. Los comentarios de 0006 quedan como
---   registro histórico de lo que se hacía entonces.
+--   registro historico de lo que se hacia entonces.
 --
 -- EFECTO SOBRE LO YA GUARDADO:
---   Las filas antiguas contienen base64 de AES-GCM. Al no ser JSON válido, el
+--   Las filas antiguas contienen base64 de AES-GCM. Al no ser JSON valido, el
 --   cliente las ignora y el siguiente `pushProfile` sobrescribe la fila con
 --   texto plano. No hay que migrar datos a mano: el perfil es regenerable.
 --
--- Es idempotente. DÓNDE: Supabase → SQL Editor → New query → Run
+-- Es idempotente. DONDE: Supabase -> SQL Editor -> New query -> Run
 -- ============================================================================
 
 begin;
 
 do $$
 begin
-  -- Renombra solo si aún existe la columna vieja y no existe la nueva.
+  -- Renombra solo si aun existe la columna vieja y no existe la nueva.
   if exists (select 1 from information_schema.columns
               where table_schema = 'public' and table_name = 'user_profiles'
                 and column_name = 'encrypted')
@@ -49,14 +49,14 @@ begin
   end if;
 end $$;
 
--- Enterrar la afirmación falsa también en la documentación del esquema.
+-- Enterrar la afirmacion falsa tambien en la documentacion del esquema.
 comment on table public.user_profiles is
-  'Perfil del usuario en JSON plano. La confidencialidad la da RLS (id = auth.uid()); el AES-GCM de 0006 era decorativo y se retiró en 0008.';
+  'Perfil del usuario en JSON plano. La confidencialidad la da RLS (id = auth.uid()); el AES-GCM de 0006 era decorativo y se retiro en 0008.';
 
 comment on column public.user_profiles.data is
-  'Perfil serializado en JSON claro (texto). Legible por el dueño de la fila y por el servidor: NO meter secretos aquí.';
+  'Perfil serializado en JSON claro (texto). Legible por el dueno de la fila y por el servidor: NO meter secretos aqui.';
 
--- ── Verificación ─────────────────────────────────────────────────────────────
+-- -- Verificacion -------------------------------------------------------------
 select column_name as columna,
        data_type   as tipo,
        is_nullable as puede_ser_nulo
@@ -75,8 +75,8 @@ commit;
 -- ESPERADO:
 --   * NOTICE: "Columna renombrada: encrypted -> data."
 --   * En columnas: id, data, updated_at.
---   * 4 políticas (select/insert/update/delete) con rol `authenticated`...
---     OJO: 0006 NO limitó el rol. Si las políticas salen sin `to authenticated`,
---     conviene endurecerlas en una migración aparte; hoy `auth.uid()` ya es
---     NULL para `anon`, así que no hay fuga, pero es más explícito.
+--   * 4 politicas (select/insert/update/delete) con rol `authenticated`...
+--     OJO: 0006 NO limito el rol. Si las politicas salen sin `to authenticated`,
+--     conviene endurecerlas en una migracion aparte; hoy `auth.uid()` ya es
+--     NULL para `anon`, asi que no hay fuga, pero es mas explicito.
 -- ============================================================================

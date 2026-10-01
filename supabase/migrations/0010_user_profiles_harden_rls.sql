@@ -1,19 +1,19 @@
 -- ============================================================================
--- Migración 0010 — Endurecer RLS de user_profiles (defensa en profundidad)
+-- Migracion 0010 - Endurecer RLS de user_profiles (defensa en profundidad)
 --
--- QUÉ CORRIGE:
---   0006 creó las políticas de user_profiles SIN `to authenticated` (se aplican
---   a `public`, pero auth.uid() es NULL para anon → no pasan). También usa
---   `auth.uid() = id` en lugar de `(select auth.uid())` (re-evaluación por fila,
+-- QUE CORRIGE:
+--   0006 creo las politicas de user_profiles SIN `to authenticated` (se aplican
+--   a `public`, pero auth.uid() es NULL para anon -> no pasan). Tambien usa
+--   `auth.uid() = id` en lugar de `(select auth.uid())` (re-evaluacion por fila,
 --   advertido por el linter de RLS de Supabase).
 --
--- QUÉ HACE:
---   - Re-crea TODAS las políticas con `to authenticated`.
---   - Usa `(select auth.uid())` para evitar re-evaluación por fila.
---   - Es idempotente (borra políticas existentes primero).
+-- QUE HACE:
+--   - Re-crea TODAS las politicas con `to authenticated`.
+--   - Usa `(select auth.uid())` para evitar re-evaluacion por fila.
+--   - Es idempotente (borra politicas existentes primero).
 --
 -- NO CAMBIA EL COMPORTAMIENTO (no introduce fuga): anon sigue sin poder leer
--- insert/update/delete porque auth.uid() es NULL. Solo endurece la redacción.
+-- insert/update/delete porque auth.uid() es NULL. Solo endurece la redaccion.
 -- ============================================================================
 begin;
 
@@ -47,7 +47,7 @@ create policy "Users can delete own profile"
   to authenticated
   using ((select auth.uid()) = id);
 
--- Verificación
+-- Verificacion
 select polname, polroles::text as roles, cmd
   from pg_policy
  where polrelid = 'public.user_profiles'::regclass
@@ -55,5 +55,5 @@ select polname, polroles::text as roles, cmd
 
 commit;
 -- ============================================================================
--- ESPERADO: 4 políticas con roles como '{authenticated}' (o 'authenticated').
+-- ESPERADO: 4 politicas con roles como '{authenticated}' (o 'authenticated').
 -- ============================================================================
