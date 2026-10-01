@@ -5,8 +5,10 @@
  * uso (o desde Ajustes). La IA lo lee como contexto en cada planificación
  * para dar recomendaciones personalizadas.
  *
- * Privacidad: el perfil se cifra con AES-GCM antes de sincronizar a
- * Supabase. En local queda en claro (ya está en tu dispositivo).
+ * Privacidad: el perfil se sincroniza en TEXTO PLANO a Supabase, protegido
+ * por RLS (cada fila solo la ve su dueño). NO se cifra a propósito: el
+ * AES-GCM anterior derivaba la clave de un dato público y no protegía nada
+ * (ver src/store/profile.ts).
  */
 
 export type Chronotype = "matutino" | "nocturno" | "flexible";

@@ -2,10 +2,21 @@
  * Almacenamiento del perfil de usuario.
  *
  * Local: localStorage (objeto pequeño, un solo registro).
- * Sync: cifrado con AES-GCM antes de subir a Supabase.
+ * Sync: se sube tal cual (JSON en texto) a Supabase, protegido por RLS.
  *
- * La clave de cifrado se deriva del user_id de Supabase + un salt fijo.
- * Sin sesión no hay sync, solo local.
+ * ─── ¿POR QUÉ NO HAY CIFRADO? ────────────────────────────────────────────────
+ * Hasta la migración 0008 esto "cifraba" con AES-GCM derivando la clave de
+ * `${userId}:${SALT}`. Como `userId` es la clave primaria de la tabla y el
+ * salt está en este mismo archivo, cualquiera con un dump podía descifrarlo:
+ * no aportaba confidencialidad, solo la apariencia de tenerla.
+ *
+ * El perfil son horas de sueño, cronotipo y rutina: es MENOS sensible que las
+ * tareas, que ya viven en texto plano bajo RLS. Cifrar solo el perfil era
+ * incoherente. La frontera de confianza es RLS (`id = auth.uid()`), igual que
+ * en `tasks`, `projects` y `tombstones`. Si algún día hace falta
+ * confidencialidad real frente al servidor, habrá que cifrar TODO (tareas
+ * incluidas) con una clave que el servidor no conozca — ver el historial de
+ * la conversación sobre las opciones con passphrase.
  */
 import { supabase } from "./supabase";
 import type { UserProfile } from "@/domain/profile";
@@ -41,72 +52,17 @@ export function clearProfile(): void {
   }
 }
 
-// ─── CIFRADO AES-GCM ─────────────────────────────────────────────────────────
-
-const SALT = "ald-a-profile-v1";
-
-/** Deriva una clave AES a partir del user_id de Supabase. */
-async function deriveKey(userId: string): Promise<CryptoKey> {
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(`${userId}:${SALT}`),
-    "PBKDF2",
-    false,
-    ["deriveKey"],
-  );
-  return crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: enc.encode(SALT),
-      iterations: 100_000,
-      hash: "SHA-256",
-    },
-    keyMaterial,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"],
-  );
-}
-
-/** Cifra el perfil para sync seguro. */
-async function encryptProfile(profile: UserProfile, userId: string): Promise<string> {
-  const key = await deriveKey(userId);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const data = new TextEncoder().encode(JSON.stringify(profile));
-  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data);
-  // Combinar iv + ciphertext en un solo base64
-  const combined = new Uint8Array(iv.length + encrypted.byteLength);
-  combined.set(iv);
-  combined.set(new Uint8Array(encrypted), iv.length);
-  return btoa(String.fromCharCode(...combined));
-}
-
-/** Descifra el perfil desde Supabase. */
-async function decryptProfile(encoded: string, userId: string): Promise<UserProfile | null> {
-  try {
-    const key = await deriveKey(userId);
-    const combined = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
-    const iv = combined.slice(0, 12);
-    const ciphertext = combined.slice(12);
-    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
-    return JSON.parse(new TextDecoder().decode(decrypted)) as UserProfile;
-  } catch {
-    return null;
-  }
-}
-
 // ─── SYNC SUPABASE ───────────────────────────────────────────────────────────
+//
+// Tabla `user_profiles` (migración 0006, columna renombrada en 0008):
+//   id uuid PK → auth.users(id), data text, updated_at timestamptz
 
 async function getUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data.session?.user.id ?? null;
 }
 
-/**
- * Sube el perfil cifrado a Supabase.
- * Tabla necesaria: user_profiles (id uuid PK, encrypted text, updated_at timestamptz)
- */
+/** Sube el perfil (JSON claro) a Supabase. */
 export async function pushProfile(): Promise<{ ok: boolean; error?: string }> {
   const userId = await getUserId();
   if (!userId) return { ok: false, error: "No hay sesión de Supabase activa" };
@@ -115,18 +71,20 @@ export async function pushProfile(): Promise<{ ok: boolean; error?: string }> {
   if (!profile) return { ok: false, error: "No hay perfil guardado localmente" };
 
   try {
-    const encrypted = await encryptProfile(profile, userId);
     const { error } = await supabase
       .from("user_profiles")
       .upsert({
         id: userId,
-        encrypted,
+        data: JSON.stringify(profile),
         updated_at: profile.updatedAt,
       });
 
     if (error) {
       if (error.code === "42P01" || error.message?.includes("does not exist")) {
         return { ok: false, error: "Tabla user_profiles no existe — ejecuta la migración 0006 en Supabase" };
+      }
+      if (error.code === "42703" || /column .*encrypted|column .*data/i.test(error.message ?? "")) {
+        return { ok: false, error: "Falta la columna `data` — ejecuta la migración 0008 en Supabase" };
       }
       return { ok: false, error: error.message };
     }
@@ -137,8 +95,11 @@ export async function pushProfile(): Promise<{ ok: boolean; error?: string }> {
 }
 
 /**
- * Descarga y descifra el perfil desde Supabase.
- * Si existe en la nube, lo guarda localmente.
+ * Baja el perfil desde Supabase y lo guarda local si es más reciente.
+ *
+ * Las filas anteriores a la migración 0008 contienen base64 de AES-GCM, que
+ * no es JSON válido: `JSON.parse` falla y se devuelve null en vez de romper.
+ * El siguiente `pushProfile` sobrescribe esa fila con texto plano.
  */
 export async function pullProfile(): Promise<UserProfile | null> {
   const userId = await getUserId();
@@ -147,14 +108,19 @@ export async function pullProfile(): Promise<UserProfile | null> {
   try {
     const { data, error } = await supabase
       .from("user_profiles")
-      .select("encrypted, updated_at")
+      .select("data, updated_at")
       .eq("id", userId)
       .single();
 
-    if (error || !data?.encrypted) return null;
+    if (error || !data?.data) return null;
 
-    const remote = await decryptProfile(data.encrypted, userId);
-    if (!remote) return null;
+    let remote: UserProfile;
+    try {
+      remote = JSON.parse(data.data) as UserProfile;
+    } catch {
+      // Fila heredada (AES-GCM de 0006) o dato corrupto: se ignora sin ruido.
+      return null;
+    }
 
     // Guardar solo si es más reciente que lo local
     const local = loadProfile();
@@ -168,8 +134,16 @@ export async function pullProfile(): Promise<UserProfile | null> {
   }
 }
 
-/** Push + pull del perfil (una sola llamada desde el flujo de sync). */
-export async function syncProfile(): Promise<void> {
-  await pushProfile();
+/**
+ * Sincronización manual del perfil: **pull primero, luego push**.
+ *
+ * El orden importa y es el CONTRARIO al de las tareas. El perfil es una sola
+ * fila con política «gana el más reciente», y `pushProfile` no compara fechas:
+ * si subiéramos primero, pisaríamos en la nube un perfil más nuevo que el
+ * local. Bajando primero (solo adopta el remoto si es más reciente) y subiendo
+ * después, lo que se sube ya es el ganador real.
+ */
+export async function syncProfile(): Promise<{ ok: boolean; error?: string }> {
   await pullProfile();
+  return pushProfile();
 }
