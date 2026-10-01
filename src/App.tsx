@@ -18,7 +18,7 @@ import SearchView from "@/views/SearchView";
 import SettingsView from "@/views/SettingsView";
 import OverdueRescheduleModal from "@/components/OverdueRescheduleModal";
 import ProfileQuestionnaire from "@/components/ProfileQuestionnaire";
-import { loadProfile } from "@/store/profile";
+import { loadProfile, pullProfile } from "@/store/profile";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/store/db";
 import { pullAndSyncFromSupabase } from "@/store/sync";
@@ -41,18 +41,36 @@ function AppInner() {
   const openCapture = useStore((s) => s.openCapture);
   const loadSession = useStore((s) => s.loadSession);
   const session = useStore((s) => s.session);
+  const sessionLoaded = useStore((s) => s.sessionLoaded);
   const pushToast = useStore((s) => s.pushToast);
   const theme = useStore((s) => s.theme);
   const [showNotifBanner, setShowNotifBanner] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const pulledFor = useRef<string | null>(null);
+  const profileCheckedFor = useRef<string | null>(null);
 
-  // Mostrar cuestionario de perfil si no existe (primer uso)
+  // Perfil — se decide DESPUÉS de intentar bajarlo de la nube.
+  //
+  // Antes era un efecto de montaje que preguntaba «¿hay perfil local?»: en un
+  // dispositivo nuevo la respuesta era «no», así que el cuestionario aparecía
+  // aunque el perfil SÍ existiera en la nube. Y `pullProfile` no se llamaba
+  // nunca: el perfil se subía pero jamás se bajaba.
+  //
+  // Ahora esperamos a saber si hay sesión (`sessionLoaded`); si la hay, bajamos
+  // el perfil; y solo pedimos el cuestionario si tras eso sigue sin haber uno.
+  // El cuestionario ofrece «Iniciar sesión» para no crear un perfil local por
+  // encima de uno que ya exista en la nube.
   useEffect(() => {
-    if (!loadProfile()) {
-      setShowProfile(true);
-    }
-  }, []);
+    if (!sessionLoaded) return;
+    const userId = session?.user?.id ?? "anon";
+    if (profileCheckedFor.current === userId) return;
+    profileCheckedFor.current = userId;
+
+    void (async () => {
+      if (userId !== "anon") await pullProfile();
+      if (!loadProfile()) setShowProfile(true);
+    })();
+  }, [sessionLoaded, session]);
 
   // Cargar sesión inicial de Supabase
   useEffect(() => {

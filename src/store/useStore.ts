@@ -23,6 +23,9 @@ interface StoreState {
   showDeviation: boolean;
   selectedProjectId?: string;
   session: Session | null;
+  /** true en cuanto `loadSession()` termina, aunque no haya sesión.
+   *  Evita confundir "todavía no sé" (null inicial) con "no hay cuenta". */
+  sessionLoaded: boolean;
   /** Tema visual activo (ID: "warm-tech", "editorial-calido", ...). */
   theme: string;
   /** Estado de la última sincronización con Supabase. */
@@ -58,6 +61,7 @@ export const useStore = create<StoreState>((set) => ({
   showDeviation: false,
   selectedProjectId: undefined,
   session: null,
+  sessionLoaded: false,
   theme: readThemePref(),
   syncStatus: "idle",
   lastSyncAt: null,
@@ -87,9 +91,9 @@ export const useStore = create<StoreState>((set) => ({
   loadSession: async () => {
     try {
       const { data } = await supabase.auth.getSession();
-      set({ session: data.session });
+      set({ session: data.session, sessionLoaded: true });
     } catch {
-      set({ session: null });
+      set({ session: null, sessionLoaded: true });
     }
   }
 }));
