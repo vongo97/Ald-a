@@ -30,7 +30,20 @@
 
 begin;
 
--- ── A) Diagnóstico previo ─────────────────────────────────────────────────────
+-- ── A) Añadir la columna ANTES de mirarla ──────────────────────────────────────
+--
+-- ORDEN IMPORTA: esta sentencia tiene que ir antes del `select` de abajo,
+-- no dentro del bloque de reparación. Ese `select` consulta
+-- `public.tombstones.user_id` para contar las tumbas huérfanas, y si se
+-- ejecuta antes de que la columna exista, PostgreSQL aborta con
+--     ERROR: 42703: column "user_id" does not exist
+-- y la transacción se revierte entera: no se aplica NADA de la migración.
+-- Es idempotente, así que repetirlo en el bloque DO de más abajo es inocuo.
+
+alter table public.tombstones
+  add column if not exists user_id uuid references auth.users (id) on delete cascade;
+
+-- ── B) Diagnóstico previo ─────────────────────────────────────────────────────
 
 select 'RLS en tombstones'                                  as concepto,
        case when c.relrowsecurity then 'ACTIVADO' else 'NO activado' end as valor
@@ -50,7 +63,7 @@ union all
 select 'cuentas en auth.users',
        (select count(*) from auth.users)::text;
 
--- ── B) Reparación ─────────────────────────────────────────────────────────────
+-- ── C) Reparación ─────────────────────────────────────────────────────────────
 
 do $$
 declare
@@ -114,7 +127,7 @@ begin
   raise notice 'RLS estricto ACTIVADO en tombstones. Cada usuario solo ve y toca sus propias tumbas.';
 end $$;
 
--- ── C) Verificación ───────────────────────────────────────────────────────────
+-- ── D) Verificación ───────────────────────────────────────────────────────────
 
 select tablename  as tabla,
        policyname as politica,
