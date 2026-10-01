@@ -12,7 +12,7 @@ import {
 import { exportDataToJSON, importDataFromJSON } from "@/store/sync";
 import { supabase } from "@/store/supabase";
 import { THEMES } from "@/store/themes";
-import { loadProfile, saveProfile, clearProfile, pushProfile } from "@/store/profile";
+import { loadProfile, clearProfile, syncProfile } from "@/store/profile";
 import { PROFILE_QUESTIONS, type UserProfile } from "@/domain/profile";
 import ProfileQuestionnaire from "@/components/ProfileQuestionnaire";
 import WeekStrip from "@/components/WeekStrip";
@@ -478,6 +478,15 @@ export default function SettingsView() {
                 onClick={async () => {
                   await supabase.auth.signOut();
                   await loadSession();
+                  // Purga el caché del service worker: las respuestas cacheadas
+                  // de la API sobreviven al cierre de sesión y, en un
+                  // dispositivo compartido, quedarían accesibles.
+                  if ("caches" in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(
+                      keys.filter((k) => k !== "assets-v1").map((k) => caches.delete(k)),
+                    );
+                  }
                   pushToast("Sesión cerrada");
                 }}
               >
@@ -537,7 +546,9 @@ function ProfileSettingsSection() {
   };
 
   const handleSync = async () => {
-    const result = await pushProfile();
+    // Viaje completo: baja primero (solo si la nube tiene algo más nuevo) y
+    // sube después. Subir sin bajar pisaría un perfil remoto más reciente.
+    const result = await syncProfile();
     if (result.ok) {
       pushToast("Perfil sincronizado con la nube ☁️");
     } else {

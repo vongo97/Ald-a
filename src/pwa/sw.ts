@@ -21,8 +21,25 @@ registerRoute(
   new StaleWhileRevalidate({ cacheName: "assets-v1" }),
 );
 
+// ⚠️ El origen de Supabase queda EXPRESAMENTE FUERA del caché.
+//
+// Este route cachea por defecto toda GET a terceros, y eso incluía
+// `*.supabase.co`: las respuestas de `/rest/v1/...` viajan en la cabecera
+// Authorization y SON los datos del usuario. Cachearlas tiene dos efectos:
+//
+//   1. Sin red, la app sigue pintando tareas desde el caché, en claro.
+//   2. La caché del service worker sobrevive al cierre de sesión (y al
+//      cierre del navegador), así que en un dispositivo compartido las
+//      respuestas quedan ahí, legibles desde DevTools.
+//
+// Sync ya tolera los fallos: `pushLocalChanges` aborta si la nube no
+// responde y el pull deja lo local intacto. Perder el cacheo de la API no
+// rompe nada; solo se pierde algo de velocidad sin conexión.
 registerRoute(
-  ({ url, request }) => request.method === "GET" && url.origin !== self.location.origin,
+  ({ url, request }) =>
+    request.method === "GET" &&
+    url.origin !== self.location.origin &&
+    !url.hostname.endsWith(".supabase.co"),
   new NetworkFirst({
     cacheName: "api-v1",
     networkTimeoutSeconds: 5,
