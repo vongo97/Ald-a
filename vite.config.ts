@@ -44,5 +44,9 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // IndexedDB real en memoria: permite testear `actions.ts` contra el Dexie
+    // de verdad en vez de contra un doble que se parece cada vez menos.
+    // Ver src/test-setup.ts.
+    setupFiles: ["./src/test-setup.ts"],
   },
 });

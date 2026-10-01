@@ -1,0 +1,65 @@
+# Verificacion en cada push y en cada PR.
+#
+# Motivo de existir: el bug de resurreccion de tareas borradas entro en el
+# repositorio porque (1) el fichero donde vivia no tenia ni un test y (2) nada
+# obligaba a ejecutar los 283 tests que si existian. Este fichero cierra (2),
+# y los tests de actions.ts cierran (1).
+#
+# Los tres pasos reproducen, en este orden, lo que un push a main tiene que
+# cumplir: compila los tipos, pasa los tests y genera un bundle cuyo hash de
+# CSP cuadra con vercel.json.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Un push nuevo invalida el run anterior del mismo ref: no se malgastan
+# minutos en commits que ya son historia.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Tipos, tests y build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Codigo
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          # 22 es la LTS mas compatible con el stack (vite 7 y vitest 4 piden
+          # 20.19+). Si en local se usa otra, conviene que el CI la use tambien.
+          node-version: 22
+          # Reutiliza la cache de npm entre runs: sin esto, cada push se
+          # descarga ~400 paquetes.
+          cache: npm
+
+      - name: Dependencias
+        run: npm ci
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Build (incluye el hash del CSP)
+        run: npm run build
+        env:
+          # El build no habla con la nube: solo empaqueta. Estas son valores de
+          # mentira para que, si algun dia el build empieza a leer el entorno de
+          # verdad, el CI lo note en vez de desplegar un bundle vacio.
+          VITE_SUPABASE_URL: https://placeholder.invalid
+          VITE_SUPABASE_ANON_KEY: placeholder
+
+      - name: Auditoria de dependencias
+        run: npm audit --audit-level=high
