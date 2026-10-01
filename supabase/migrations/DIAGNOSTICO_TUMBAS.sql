@@ -1,35 +1,60 @@
 -- ============================================================================
 -- DIAGNOSTICO DE TUMBAS - solo lectura, no modifica nada
 --
--- Que hay 87 tumbas sin dueno y 3 cuentas en auth.users, asi que la 0007
--- aborta a proposito: no adivina a quien pertenece cada tumba.
+-- IMPORTANTE: este archivo NO puede mencionar tombstones.user_id, porque
+-- todavia NO existe. La migracion 0007 es la que crea esa columna, y esta
+-- consulta se ejecuta ANTES de correrla. Referenciarla aqui da:
+--   ERROR: 42703: column t.user_id does not exist
+-- (no es un fallo del diagnostico: es la columna que aun no se ha creado).
 --
--- PERO SI SE PUEDE DEDUCIR SIN ADIVINAR. El borrado de tareas y proyectos
--- es blando (columna deleted_at, migracion 0005), asi que la fila original
--- de cada tumba sigue en tasks/projects CON SU user_id. El dueno de la tumba
--- se lee de ahi, no se supone.
---
--- Este archivo comprueba si eso cubre las 87 y de que cuentas son.
+-- Consecuencia logica: HOY no hay ni una tumba con dueno. Las 87 son las 87
+-- que hay en total. Este archivo dice de quien es cada una leyendolo de la
+-- fila original en tasks/projects (el borrado es blando, columna deleted_at).
 -- ============================================================================
 
 
--- [1] Las cuentas. La 0007 resuelve solo si hay exactamente una.
---     Con 3, todo lo que no se deduzca queda pendiente de decision.
-select id,
-       email,
-       created_at,
-       last_sign_in_at,
+-- [1] Las cuentas. La 0007 solo auto-resuelve lo que no puede deducir si hay
+--     EXACTAMENTE una cuenta, asi que con 3 hay que revisar esto.
+select u.id,
+       u.email,
+       u.created_at,
+       u.last_sign_in_at,
        (select count(*) from public.tasks    t where t.user_id = u.id) as tareas,
        (select count(*) from public.projects p where p.user_id = u.id) as proyectos,
        (select count(*) from public.tasks    t where t.user_id = u.id and t.deleted_at is not null)
-         as tareas_borradas
+         as tareas_borradas,
+       (select count(*) from public.projects p where p.user_id = u.id and p.deleted_at is not null)
+         as proyectos_borrados
   from auth.users u
- order by created_at;
+ order by u.created_at;
 
 
--- [2] LAS 87 TUMBAS: cuantas se pueden deducir de tasks/projects.
---     atribuibles + no_atribuibles = total (las huerfanas son 87).
---     Si no_atribuibles = 0, la 0007 va a funcionar sin intervention.
+-- [2] De las 87 tumbas, cuantas se pueden deducir de tasks/projects.
+--     Si no_atribuibles = 0, la 0007 nueva las resuelve sola sin intervention.
+--     (hoy total_huerfanas = total de la tabla, porque ninguna tiene dueno aun)
+with src as (
+  select id, min(user_id::text)::uuid as user_id
+    from (
+      -- El cast a text: tombstones.id es text (0005) y puede que tasks.id sea
+      -- uuid. Asi la union no depende de que los tipos coincidan.
+      select id::text as id, user_id from public.tasks    where user_id is not null
+      union all
+      select id::text as id, user_id from public.projects where user_id is not null
+    ) u
+   group by id
+  having count(distinct user_id) = 1
+)
+select (select count(*) from src)                                as ids_atribuibles,
+       count(*) filter (where src.id is not null)                as atribuibles,
+       count(*) filter (where src.id is null)                    as no_atribuibles,
+       (select count(*) from public.tombstones)                 as total_en_tabla
+  from public.tombstones t
+  left join src on src.id = t.id;
+
+
+-- [3] De que cuenta es cada tumba. Una sola fila con 87 = todas tuyas y la
+--     0007 las resuelve sola. Varias filas = reparto real, tambien correcto:
+--     la atribucion por evidencia separa cada una con su dueno.
 with src as (
   select id, min(user_id::text)::uuid as user_id
     from (
@@ -40,38 +65,19 @@ with src as (
    group by id
   having count(distinct user_id) = 1
 )
-select count(*) filter (where src.id is not null) as atribuibles,
-       count(*) filter (where src.id is null)     as no_atribuibles,
-       count(*)                                   as total_huerfanas
+select coalesce(u.email, '(sin fila de origen)') as cuenta,
+       count(*)                                as tumbas
   from public.tombstones t
-  left join src on src.id = t.id
- where t.user_id is null;
-
-
--- [3] De que cuenta es cada tumba deducible. Si una sola fila con 87, todas
---     son tuyas y la 0007 las resuelve sola.
-with src as (
-  select id, min(user_id::text)::uuid as user_id
-    from (
-      select id::text as id, user_id from public.tasks    where user_id is not null
-      union all
-      select id::text as id, user_id from public.projects where user_id is not null
-    ) u
-   group by id
-  having count(distinct user_id) = 1
-)
-select coalesce(u.email, '(sin cuenta)') as cuenta,
-       count(distinct t.id)              as tumbas
-  from public.tombstones t
-  left join src  on src.id = t.id
+  left join src       on src.id = t.id
   left join auth.users u on u.id = src.user_id
- where t.user_id is null
  group by 1
  order by 2 desc;
 
 
--- [4] Las NO atribuibles, con su causa. kind='tasks' pero no esta en tasks
---     significa que la fila se borro a mano del panel.
+-- [4] Las NO atribuibles, con su causa.
+--     kind='tasks' con existe_en_tasks=0 significa que la fila original se
+--     borro a mano del panel de Supabase: no hay de donde leer el dueno.
+--     esperada: 0 filas (o solo las de filas borradas a mano).
 with src as (
   select id, min(user_id::text)::uuid as user_id
     from (
@@ -83,21 +89,23 @@ with src as (
   having count(distinct user_id) = 1
 )
 select t.kind,
-       count(*)                                          as tumbas,
+       count(*)                                                  as tumbas,
        count(*) filter (where exists (select 1 from public.tasks    where id::text = t.id)) as existe_en_tasks,
        count(*) filter (where exists (select 1 from public.projects where id::text = t.id)) as existe_en_projects,
-       min(t.updated_at)                                 as mas_antigua,
-       max(t.updated_at)                                 as mas_reciente
+       min(t.updated_at)                                         as mas_antigua,
+       max(t.updated_at)                                         as mas_reciente
   from public.tombstones t
   left join src on src.id = t.id
- where t.user_id is null and src.id is null
+ where src.id is null
  group by t.kind
  order by 2 desc;
 
 
--- [5] Ids AMBIGUOSOS: el mismo id en tasks y projects con dos duenos
---     distintos. Solo pasa con UUID fabricados a mano, no con el
---     crypto.randomUUID() del cliente. Estos la 0007 NO los toca.
+-- [5] Ids AMBIGUOSOS: el mismo id en tasks y en projects con dos duenos
+--     distintos. Solo puede pasar con UUID fabricado a mano, no con el
+--     crypto.randomUUID() del cliente. La 0007 NO los toca a proposito:
+--     elegir uno al azar haria visibles datos de la cuenta equivocada.
+--     esperada: 0 filas.
 with src as (
   select id::text as id, user_id
     from (
@@ -106,23 +114,26 @@ with src as (
       select id, user_id from public.projects where user_id is not null
     ) u
 )
-select id, count(distinct user_id) as duenos,
+select id,
+       count(distinct user_id)     as duenos,
        array_agg(distinct user_id::text) as uuids
   from src
  group by id
 having count(distinct user_id) > 1;
 
 
--- [6] Comprobacion de que el tombstone.id really es el id de una fila real.
---     Muestreo de 10 tumbas huerfanas con su fila de origen, si existe.
-select t.id, t.kind, t.updated_at,
-       ta.user_id as dueno_en_tasks,
-       pr.user_id as dueno_en_projects,
-       ta.deleted_at as borrada_en,
-       pr.deleted_at as borrada_en_projects
+-- [6] Muestra de 10 tumbas con su fila de origen, para verificar a ojo que la
+--     deduccion tiene sentido (si borrada_en no es null, la fila sigue viva).
+select t.id,
+       t.kind,
+       t.updated_at                    as tumba_creada,
+       ta.user_id                      as dueno_en_tasks,
+       ta.deleted_at                   as fila_borrada_en,
+       ta.title                        as titulo,
+       pr.user_id                      as dueno_en_projects,
+       pr.name                         as proyecto
   from public.tombstones t
   left join public.tasks    ta on ta.id::text = t.id
   left join public.projects pr on pr.id::text = t.id
- where t.user_id is null
  order by t.updated_at desc
  limit 10;

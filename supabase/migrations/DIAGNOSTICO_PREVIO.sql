@@ -67,13 +67,14 @@ select tablename as tabla, policyname as politica, roles::text as rol, cmd as op
 
 
 -- [5] Cuentas y filas. La 0007 necesita esto para el backfill.
---     Si 'tumbas SIN dueno' > 0 y 'cuentas' > 1, la 0007 se aborta
---     a proposito: no adivina a quien pertenece cada tumba.
+--     NO se consulta tombstones.user_id: esa columna todavia no existe (la
+--     crea la 0007). Referenciarla aqui da error 42703.
+--     La atribucion de tumbas por dueno esta en DIAGNOSTICO_TUMBAS.sql.
 select 'cuentas en auth.users' as concepto, count(*)::text as valor from auth.users
 union all select 'tareas', count(*)::text from public.tasks
+union all select 'tareas borradas (soft)', count(*)::text from public.tasks where deleted_at is not null
 union all select 'proyectos', count(*)::text from public.projects
 union all select 'tumbas', count(*)::text from public.tombstones
-union all select 'tumbas SIN dueno', count(*)::text from public.tombstones where user_id is null
 union all select 'perfiles', count(*)::text from public.user_profiles;
 
 
