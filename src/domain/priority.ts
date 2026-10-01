@@ -13,7 +13,8 @@ const DAY_MS = 86400_000;
  * Score sugerido (la IA propone, el usuario decide).
  * - Urgencia: proximidad de la fecha de vencimiento (vencida = máxima).
  * - Importancia: declarada por el usuario (1 crítica … 4 trivial).
- * - Edad: tareas antiguas sin fecha suben poco a poco (evita el cementerio de la bandeja).
+ * - Edad: tareas antiguas sin fecha suben poco a poco (evita el cementerio
+     *   de la vista Activas).
  * - Recurrencia: las recurrentes pendientes piden ser atendidas en su día.
  */
 export function priorityScore(task: Task, now: Date = new Date()): PriorityScore {
@@ -51,7 +52,7 @@ export function priorityScore(task: Task, now: Date = new Date()): PriorityScore
     const created = new Date(task.createdAt);
     const ageDays = Math.max(0, Math.floor((startOfDay(now).getTime() - startOfDay(created).getTime()) / DAY_MS));
     ageBoost = Math.min(25, ageDays * 2);
-    if (ageDays >= 7) reasons.push(`Lleva ${ageDays} días en la bandeja`);
+    if (ageDays >= 7) reasons.push(`Lleva ${ageDays} días sin fecha`);
   }
 
   const importance = task.importance ?? 3;

@@ -42,7 +42,7 @@ describe("priorityScore", () => {
     const old = priorityScore(makeTask({ createdAt: new Date(2026, 7, 1).toISOString() }), NOW);
     const fresh = priorityScore(makeTask({}), NOW);
     expect(old.score).toBeGreaterThan(fresh.score);
-    expect(old.reasons.some((r) => r.includes("días en la bandeja"))).toBe(true);
+    expect(old.reasons.some((r) => r.includes("días sin fecha"))).toBe(true);
   });
 
   it("recurrente pendiente recibe impulso", () => {

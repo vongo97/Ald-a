@@ -17,7 +17,7 @@ import type { ViewId } from "@/domain/types";
 const ITEMS: { id: ViewId; icon: string; label: string }[] = [
   { id: "hoy", icon: "☀️", label: "Hoy" },
   { id: "calendario", icon: "🗓️", label: "Calendario" },
-  { id: "bandeja", icon: "📥", label: "Bandeja" },
+  { id: "bandeja", icon: "📥", label: "Activas" },
   { id: "proyectos", icon: "📁", label: "Proyectos" },
   { id: "etiquetas", icon: "🏷️", label: "Etiquetas" },
   { id: "revision", icon: "📊", label: "Revisión" },

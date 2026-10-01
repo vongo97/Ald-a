@@ -51,10 +51,10 @@
 ## Fase 2 — Inteligencia local, gratis y offline (implementada)
 
 - **Score tipo Eisenhower (`src/domain/priority.ts`):** combina urgencia (días hasta vencer,
-  comparación por día calendario), importancia declarada, edad en bandeja (las huérfanas sin
-  fecha suben 2 pts/día hasta +25) y recurrencia pendiente (+10). Devuelve `score` 0–100,
-  cuadrante urgente/importante y **razones legibles** ("Vence mañana", "Lleva 12 días en la
-  bandeja"). Es *orden sugerido*: el usuario siempre puede reordenar.
+  comparación por día calendario), importancia declarada, antigüedad de las huérfanas sin
+  fecha (suben 2 pts/día hasta +25) y recurrencia pendiente (+10). Devuelve `score` 0–100,
+  cuadrante urgente/importante y **razones legibles** ("Vence mañana", "Lleva 12 días sin
+  fecha"). Es *orden sugerido*: el usuario siempre puede reordenar.
 - **Capacidad del día (`src/domain/capacity.ts`):** suma duraciones declaradas + heurística para
   las que no la traen (llamadas 15m, compras 30m, trámites 60m, informes 90m, default 45m) contra
   una capacidad planificable conservadora (≈60 % de 8 h). Aviso explícito de sobrecarga.
