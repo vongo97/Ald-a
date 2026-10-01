@@ -64,8 +64,12 @@ describe("chat", () => {
     expect(res.data).toBe("hola desde gemini");
     const [url, init] = fetchFn.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("generativelanguage.googleapis.com");
-    expect(url).toContain("key=AIza123");
     expect(url).toContain("gemini-1.5-flash");
+    // La clave va en cabecera, NO en la query string (?key=): las URLs acaban en
+    // logs de proxies y en la clave de la caché del service worker.
+    expect(url).not.toContain("key=");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["x-goog-api-key"]).toBe("AIza123");
     const body = JSON.parse(String(init.body));
     expect(body.contents[0].parts[0].text).toBe("prompt");
     expect(body.systemInstruction.parts[0].text).toBe("sys");

@@ -33,7 +33,9 @@ function endpoint(settings: Settings): string {
   }
   if (settings.provider === "gemini") {
     const model = settings.model.trim() || "gemini-3.8-flash";
-    return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(settings.apiKey.trim())}`;
+    // Usa cabecera x-goog-api-key en lugar de query string (?key=) para evitar
+    // fugas en logs/Referer y en la caché del SW.
+    return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   }
   if (settings.provider === "groq") {
     return "https://api.groq.com/openai/v1/chat/completions";
@@ -73,6 +75,7 @@ async function chatOnce(ctx: LlmContext, opts: FetchOptions): Promise<string> {
         signal: controller.signal,
         headers: {
           "content-type": "application/json",
+          "x-goog-api-key": settings.apiKey.trim(),
         },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: opts.user }] }],

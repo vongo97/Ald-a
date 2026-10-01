@@ -39,7 +39,8 @@ registerRoute(
   ({ url, request }) =>
     request.method === "GET" &&
     url.origin !== self.location.origin &&
-    !url.hostname.endsWith(".supabase.co"),
+    !url.hostname.endsWith(".supabase.co") &&
+    !url.hostname.endsWith("generativelanguage.googleapis.com"),
   new NetworkFirst({
     cacheName: "api-v1",
     networkTimeoutSeconds: 5,

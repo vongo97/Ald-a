@@ -103,7 +103,8 @@ export default function SettingsView() {
       let headers: HeadersInit = {};
       
       if (draft.provider === "gemini") {
-        url = `https://generativelanguage.googleapis.com/v1beta/models?key=${draft.apiKey}`;
+        url = "https://generativelanguage.googleapis.com/v1beta/models";
+        headers = { "x-goog-api-key": draft.apiKey };
       } else if (draft.provider === "groq") {
         url = "https://api.groq.com/openai/v1/models";
         headers = { Authorization: `Bearer ${draft.apiKey}` };
