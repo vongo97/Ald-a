@@ -7,4 +7,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error("Faltan variables de entorno de Supabase (VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY).");
 }
 
-export const supabase = createClient(supabaseUrl || "", supabaseAnonKey || "");
+export const supabase = createClient(supabaseUrl || "", supabaseAnonKey || "", {
+  auth: {
+    // Recomendado para SPA: flujo PKCE (implicito ya no es el ideal). Previene
+    // ciertos intercambios de tokens frente a fallos de navegación/history.
+    flowType: "pkce",
+  },
+});
