@@ -56,7 +56,10 @@ comment on table public.user_profiles is
 comment on column public.user_profiles.data is
   'Perfil serializado en JSON claro (texto). Legible por el dueno de la fila y por el servidor: NO meter secretos aqui.';
 
--- -- Verificacion -------------------------------------------------------------
+-- -- Verificacion ---------------------------------------------------------------
+-- DESPUES del commit: si la verificacion falla, no debe revertir el rename.
+commit;
+
 select column_name as columna,
        data_type   as tipo,
        is_nullable as puede_ser_nulo
@@ -68,8 +71,6 @@ select policyname as politica, roles as rol, cmd as operacion
   from pg_policies
  where schemaname = 'public' and tablename = 'user_profiles'
  order by policyname;
-
-commit;
 
 -- ============================================================================
 -- ESPERADO:

@@ -47,13 +47,35 @@ create policy "Users can delete own profile"
   to authenticated
   using ((select auth.uid()) = id);
 
--- Verificacion
-select polname, polroles::text as roles, cmd
-  from pg_policy
- where polrelid = 'public.user_profiles'::regclass
- order by polname;
-
-commit;
 -- ============================================================================
--- ESPERADO: 4 politicas con roles como '{authenticated}' (o 'authenticated').
+-- VERIFICACION: DESPUES del commit, nunca antes.
+--
+-- La primera version de esta migracion hacia la verificacion dentro de la
+-- transaccion, y por eso un error de typo en el select (buscaba `cmd`, que
+-- existe en la vista `pg_policies` pero no en la tabla de catalogo
+-- `pg_policy`, donde se llama `polcmd`) provoco:
+--
+--     ERROR: 42703: column "cmd" does not exist
+--
+-- y como el fallo aborta el bloque de transaccion, el commit final se
+-- convirto en rollback: las cuatro politicas NO se aplicaron. Perder una
+-- migracion por un error de lectura es el peor sitio posible para un error
+-- de lectura. Por eso aqui la transaccion se cierra antes de mirar nada.
+--
+-- Ademas el `select` no necesita transaccion: leer pg_policy no cambia nada,
+-- asi que puede ir fuera sin riesgo.
+-- ============================================================================
+commit;
+
+select policyname  as politica,
+       roles::text as rol,
+       cmd         as operacion
+  from pg_policies
+ where schemaname = 'public'
+   and tablename = 'user_profiles'
+ order by policyname;
+
+-- ============================================================================
+-- ESPERADO: 4 filas, y las cuatro con rol {authenticated} (no {public}).
+--   read -> SELECT, insert -> INSERT, update -> UPDATE, delete -> DELETE.
 -- ============================================================================

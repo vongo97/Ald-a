@@ -176,7 +176,14 @@ begin
   raise notice 'RLS estricto ACTIVADO en tombstones. Cada usuario solo ve y toca sus propias tumbas.';
 end $$;
 
--- -- D) Verificacion -----------------------------------------------------------
+-- -- D) Verificacion ------------------------------------------------------------
+--
+-- DESPUES del commit a proposito. Leer el catalogo no cambia nada, asi que
+-- la verificacion no necesita transaccion; y si un typo suyo falla, no debe
+-- llevarse por delante la correccion que si funciono. En la 0010 una
+-- verificacion mal escrita costo una ejecucion entera por eso mismo.
+
+commit;
 
 select tablename  as tabla,
        policyname as politica,
@@ -186,12 +193,10 @@ select tablename  as tabla,
  where schemaname = 'public'
    and tablename = 'tombstones';
 
-select count(*)                                     as tumbas_totales,
-       count(*) filter (where user_id is null)      as tumbas_sin_dueno,
-       count(*) filter (where user_id is not null)  as tumbas_con_dueno
+select count(*)                                    as tumbas_totales,
+       count(*) filter (where user_id is null)     as tumbas_sin_dueno,
+       count(*) filter (where user_id is not null) as tumbas_con_dueno
   from public.tombstones;
-
-commit;
 
 -- ============================================================================
 -- ESPERADO AL TERMINAR:

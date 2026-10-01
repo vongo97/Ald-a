@@ -64,7 +64,10 @@ drop index if exists public.tombstones_kind_idx;
 comment on table public.tombstones is
   'Senales de borrado para sync offline. PK = (kind, id): un mismo id puede ser tumba de tarea y de proyecto a la vez. Aislada por RLS con user_id = auth.uid().';
 
--- -- Verificacion -------------------------------------------------------------
+-- -- Verificacion ---------------------------------------------------------------
+-- DESPUES del commit: si la verificacion falla, la PK nueva no debe revertirse.
+commit;
+
 select c.conname                          as restriccion,
        a.attname                          as columna,
        array_position(c.conkey, a.attnum) as posicion
@@ -75,11 +78,9 @@ select c.conname                          as restriccion,
    and c.contype = 'p'
  order by posicion;
 
-select count(*)                                as tumbas_totales,
-       count(distinct (kind, id))              as claves_distintas
+select count(*)                   as tumbas_totales,
+       count(distinct (kind, id)) as claves_distintas
   from public.tombstones;
-
-commit;
 
 -- ============================================================================
 -- ESPERADO:
