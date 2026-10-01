@@ -52,6 +52,10 @@ const { mockData, mockSession, mockDb } = vi.hoisted(() => {
 });
 
 // ─── Mock de Supabase ─────────────────────────────────────────────────────────
+// El builder soporta la cadena `select().eq()` y filtra por `user_id` como
+// haría la política RLS del servidor (`user_id = auth.uid()`). Así los tests
+// fallan si el código dejara de enviar `user_id` en las tumbas, que es
+// exactamente la regresión que la migración 0007 previene.
 vi.mock("../supabase", () => ({
   supabase: {
     auth: {
@@ -61,19 +65,43 @@ vi.mock("../supabase", () => ({
         },
       }),
     },
-    from: (table: string) => ({
-      select: (_cols?: string) => Promise.resolve({ data: mockData[table] ?? [], error: null }),
-      upsert: (rows: Record<string, unknown> | Record<string, unknown>[]) => {
-        const arr = Array.isArray(rows) ? rows : [rows];
-        const store = mockData[table] ?? (mockData[table] = []);
-        for (const row of arr) {
-          const existing = store.find((r) => r.id === row.id);
-          if (existing) Object.assign(existing, row);
-          else store.push({ ...row });
-        }
-        return Promise.resolve({ error: null });
-      },
-    }),
+    from: (table: string) => {
+      const store = () => mockData[table] ?? (mockData[table] = []);
+      // Filtros acumulados en la cadena, aplicados al resolver la promesa.
+      const filters: Array<(r: Record<string, unknown>) => boolean> = [];
+      const applyFilters = (rows: Record<string, unknown>[]) => {
+        // RLS: cada usuario solo ve sus propias filas.
+        const own = mockSession.userId
+          ? rows.filter((r) => !r.user_id || r.user_id === mockSession.userId)
+          : rows;
+        return filters.reduce((acc, f) => acc.filter(f), own);
+      };
+      // thenable: `select()` y `select().eq()` devuelven SIEMPRE este mismo
+      // objeto, así que `await` sobre cualquiera de los dos casos resuelve
+      // a `{ data, error }` como en el cliente real de supabase-js.
+      const selectResult = {
+        eq: (col: string, val: unknown) => {
+          filters.push((r) => r[col] === val);
+          return selectResult;
+        },
+        then: (
+          resolve: (v: { data: Record<string, unknown>[]; error: null }) => unknown,
+          reject?: (e: unknown) => unknown,
+        ) => Promise.resolve({ data: applyFilters(store()), error: null }).then(resolve, reject),
+      };
+      return {
+        select: (_cols?: string) => selectResult,
+        upsert: (rows: Record<string, unknown> | Record<string, unknown>[]) => {
+          const arr = Array.isArray(rows) ? rows : [rows];
+          for (const row of arr) {
+            const existing = store().find((r) => r.id === row.id);
+            if (existing) Object.assign(existing, row);
+            else store().push({ ...row });
+          }
+          return Promise.resolve({ error: null });
+        },
+      };
+    },
   },
 }));
 
@@ -248,8 +276,14 @@ describe("pullAndSyncFromSupabase", () => {
   it("aplica borrados remotos (tombstones) → deletedAt + contador", async () => {
     // Local: tarea viva
     mockDb._tables.tasks.set("t1", { id: "t1", title: "Viva", updatedAt: "2026-01-01T00:00:00Z" });
-    // Nube: tumba para esa tarea
-    mockData.tombstones.push({ id: "t1", kind: "tasks", updated_at: "2026-01-02T00:00:00Z" });
+    // Nube: tumba para esa tarea. Lleva `user_id` porque desde la
+    // migración 0007 la política RLS solo deja ver las tumbas propias.
+    mockData.tombstones.push({
+      id: "t1",
+      kind: "tasks",
+      user_id: "user-1",
+      updated_at: "2026-01-02T00:00:00Z",
+    });
 
     const result = await pullAndSyncFromSupabase();
 
@@ -265,7 +299,12 @@ describe("pullAndSyncFromSupabase", () => {
     // Local: ya borrada hace más tiempo
     mockDb._tables.tasks.set("t1", { id: "t1", updatedAt: "2026-01-01T00:00:00Z", deletedAt: "2026-01-03T00:00:00Z" });
     // Nube: tumba anterior
-    mockData.tombstones.push({ id: "t1", kind: "tasks", updated_at: "2026-01-02T00:00:00Z" });
+    mockData.tombstones.push({
+      id: "t1",
+      kind: "tasks",
+      user_id: "user-1",
+      updated_at: "2026-01-02T00:00:00Z",
+    });
 
     const result = await pullAndSyncFromSupabase();
 
@@ -295,6 +334,26 @@ describe("pullAndSyncFromSupabase", () => {
 
     expect(result!.pulledTasks).toBe(1);
     expect(mockDb._tables.tasks.get("t1")!.title).toBe("Nube nueva");
+  });
+
+  it("tombstones: NO aplica tumbas de otra cuenta (aislamiento RLS)", async () => {
+    // Local: tarea viva
+    mockDb._tables.tasks.set("t1", { id: "t1", title: "Viva", updatedAt: "2026-01-01T00:00:00Z" });
+    // Nube: tumba ajena (misma id, distinto user_id)
+    mockData.tombstones.push({
+      id: "t1",
+      kind: "tasks",
+      user_id: "otro-usuario",
+      updated_at: "2026-01-02T00:00:00Z",
+    });
+
+    const result = await pullAndSyncFromSupabase();
+
+    // El mock ya filtra por user_id (simula RLS), así que la tumba ajena
+    // no llega y NO se borra la tarea local.
+    expect(result).not.toBeNull();
+    expect(result!.remoteDeletes).toBe(0);
+    expect(mockDb._tables.tasks.get("t1")!.deletedAt).toBeUndefined();
   });
 
   it("actualiza el estado del store: syncing → synced", async () => {

@@ -244,8 +244,10 @@ export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
     }
 
     // 3) Bajar tumbas para aplicar borrados remotos.
+    //    El `.eq("user_id", userId)` es redundante con RLS, pero deja la
+    //    intención explícita y protege si la política llegara a relajarse.
     const [{ data: tombData, error: tombErr }] = await Promise.all([
-      supabase.from("tombstones").select("id, kind, updated_at"),
+      supabase.from("tombstones").select("id, kind, updated_at").eq("user_id", userId),
     ]);
     if (tombErr) console.error("Pull de tumbas falló:", tombErr);
 
@@ -323,7 +325,10 @@ export async function autoPushDeleteTask(id: string): Promise<void> {
   const userId = await sessionUserId();
   if (!userId) return;
   const now = stampNow();
-  const { error } = await supabase.from("tombstones").upsert({ id, kind: "tasks", updated_at: now });
+  const { error } = await supabase
+    .from("tombstones")
+    // onConflict explícito: la PK es compuesta (kind, id) desde la 0009.
+    .upsert({ id, kind: "tasks", user_id: userId, updated_at: now }, { onConflict: "id,kind" });
   if (error) console.error("AutoSync delete error (Task tombstone):", error);
 }
 
@@ -332,7 +337,10 @@ export async function autoPushDeleteProject(id: string): Promise<void> {
   const userId = await sessionUserId();
   if (!userId) return;
   const now = stampNow();
-  const { error } = await supabase.from("tombstones").upsert({ id, kind: "projects", updated_at: now });
+  const { error } = await supabase
+    .from("tombstones")
+    // onConflict explícito: la PK es compuesta (kind, id) desde la 0009.
+    .upsert({ id, kind: "projects", user_id: userId, updated_at: now }, { onConflict: "id,kind" });
   if (error) console.error("AutoSync delete error (Project tombstone):", error);
 }
 
@@ -362,9 +370,12 @@ async function autoRestoreRows(
   if (!userId) return;
   // El filtro de `kind` importa: la clave de las tumbas es (kind, id), así
   // que un mismo id puede existir como tumba de tarea y de proyecto.
+  // El `user_id` es redundante (la política RLS ya filtra por `auth.uid()`),
+  // pero se deja explícito: si algún día la política se relaja, el borrado
+  // sigue siendo del usuario y no de otra cuenta.
   const ids = rows.map((r) => r.id as string);
   const [{ error: tombErr }, { error }] = await Promise.all([
-    supabase.from("tombstones").delete().in("id", ids).eq("kind", kind),
+    supabase.from("tombstones").delete().in("id", ids).eq("kind", kind).eq("user_id", userId),
     supabase
       .from(table)
       .upsert(
