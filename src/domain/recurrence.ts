@@ -53,6 +53,15 @@ const ORDINAL_MES: Record<number, string> = {
 };
 
 /**
+ * Los días en español, sin el «cada» delante. Deduplica y ordena: quien enseña
+ * días no debería poder imprimir «lunes, lunes», ni «miércoles, lunes» por
+ * haberlos escrito al revés.
+ */
+export function nombresDias(dias: number[]): string {
+  return [...new Set(dias)].sort((a, b) => a - b).map((d) => DIA_LARGO[d] ?? "?").join(", ");
+}
+
+/**
  * Cómo se dice una recurrencia en español, para enseñarla.
  *
  * Existe porque un `🔁` a secas es un dato que no se puede respetar: si no
@@ -65,15 +74,10 @@ export function describeRecurrence(spec: RecurrenceSpec): string {
     case "daily":
       return n === 1 ? "cada día" : `cada ${n} días`;
     case "weekly": {
-      // Sin `uniq`: un `weekdays` con 1,1 se lee «cada lunes, lunes». El
-      // parser ya deduplica, pero esto muestra lo que hay en la base, y ahí
-      // un import puede haber dejado cualquier cosa.
-      const dias = [...new Set(spec.weekdays ?? [])]
-        .sort((a, b) => a - b)
-        .map((d) => DIA_LARGO[d] ?? "?");
-      if (dias.length === 0) return n === 1 ? "cada semana" : `cada ${n} semanas`;
-      if (n === 1) return `cada ${dias.join(", ")}`;
-      return `cada ${n} semanas, los ${dias.join(", ")}`;
+      const dias = nombresDias(spec.weekdays ?? []);
+      if (dias === "") return n === 1 ? "cada semana" : `cada ${n} semanas`;
+      if (n === 1) return `cada ${dias}`;
+      return `cada ${n} semanas, los ${dias}`;
     }
     case "monthly": {
       if (spec.nthWeekday) {

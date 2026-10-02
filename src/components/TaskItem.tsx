@@ -1,13 +1,14 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useStore } from "@/store/useStore";
 import { db } from "@/store/db";
 import { toggleTask, deleteTask, restoreTask, addSubtask, updateTask } from "@/store/actions";
 import { toggleWithUndo } from "@/store/useStore";
 import { priorityScore } from "@/domain/priority";
-import { describeRecurrence } from "@/domain/recurrence";
+import { describeRecurrence, nombresDias } from "@/domain/recurrence";
+import { propuestaDeDia } from "@/parsers/propuestaDia";
 import { formatLocalDate, parseISODate, toISODate, startOfDay } from "@/domain/dateutils";
-import type { Task } from "@/domain/types";
+import type { RecurrenceSpec, Task } from "@/domain/types";
 import BreakdownButton from "./BreakdownButton";
 import SubtaskTimePanel from "./SubtaskTimePanel";
 
@@ -23,6 +24,19 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
   const [editDate, setEditDate] = useState(task.dueDate ?? "");
   const [editTime, setEditTime] = useState(task.dueTime ?? "");
   const [editDuration, setEditDuration] = useState<number | undefined>(task.durationMin);
+  // La recurrencia que se GUARDARÁ, no la que hay. Empieza siendo la misma, y
+  // solo se separa si quien edita acepta el día que pide el título (abajo).
+  const [editRecurrence, setEditRecurrence] = useState<RecurrenceSpec | undefined>(task.recurrence);
+
+  // El título manda sobre el día… pero no a lo bruto. Si el texto nombra un día
+  // que no es el de la tarea, se ofrece; no se aplica solo, porque corregir una
+  // errata movería la fecha sin que nadie lo hubiera pedido.
+  const propuesta = useMemo(
+    () => (editing ? propuestaDeDia(editTitle, editRecurrence) : null),
+    [editing, editTitle, editRecurrence],
+  );
+  const recurrenceCambiada =
+    JSON.stringify(editRecurrence) !== JSON.stringify(task.recurrence);
 
   const subtasks = useLiveQuery(
     () =>
@@ -143,6 +157,28 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                       onChange={(e) => setEditTitle(e.target.value)}
                       className="input py-1 text-xs"
                     />
+                    {propuesta && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded border border-violet-500/40 light:border-violet-300 bg-violet-500/10 light:bg-violet-50 px-2 py-1 text-[11px] text-violet-200 light:text-violet-700">
+                        <span>
+                          Has escrito <strong className="font-semibold">{propuesta.texto}</strong>
+                          {propuesta.esNueva
+                            ? " y esta tarea no se repite."
+                            : ` y ahora se repite ${describeRecurrence(task.recurrence!)}.`}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setEditRecurrence(propuesta.spec)}
+                          className="chip shrink-0 bg-violet-500/30 light:bg-violet-200 light:text-violet-900 hover:opacity-80"
+                        >
+                          {propuesta.esNueva ? "Hacerla recurrente" : `Cambiar a ${nombresDias(propuesta.weekdays)}`}
+                        </button>
+                      </div>
+                    )}
+                    {!propuesta && recurrenceCambiada && editRecurrence && (
+                      <p className="mt-1 text-[11px] text-muted">
+                        🔁 Se repetirá {describeRecurrence(editRecurrence)}.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="mb-0.5 block text-muted">Notas</label>
@@ -205,6 +241,7 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                           dueDate: editDate || undefined,
                           dueTime: editTime || undefined,
                           durationMin: editDuration,
+                          recurrence: editRecurrence,
                         });
                         setEditing(false);
                         pushToast("Tarea actualizada");
@@ -288,6 +325,7 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                     setEditDate(task.dueDate ?? "");
                     setEditTime(task.dueTime ?? "");
                     setEditDuration(task.durationMin);
+                    setEditRecurrence(task.recurrence);
                     setEditing((v) => !v);
                   }}
                 >
