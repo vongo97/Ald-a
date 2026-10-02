@@ -22,6 +22,7 @@ import { loadProfile, pullProfile } from "@/store/profile";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/store/db";
 import { pullAndSyncFromSupabase } from "@/store/sync";
+import { arrancarPoller } from "@/store/poller";
 import { purgeExpiredTrash } from "@/store/purge";
 import { autoBreakdownBlobs } from "@/store/autoBreakdown";
 import { settingsRepo } from "@/store/settings";
@@ -35,6 +36,17 @@ import {
   requestNotifPermission,
   updateBadge,
 } from "@/notifications/notifier";
+
+/**
+ * Cada cuánto se mira la nube mientras la app está a la vista.
+ *
+ * 30 s lo eligió quien usa la app, no un número redondo por costumbre: una
+ * sincronización son ~3 peticiones y ~550 ms de ida y vuelta contra Supabase
+ * (medido contra este proyecto), así que el coste es bajo en tiempo y
+ * aceptable en datos. Estar en segundo plano no cuenta: ahí manda
+ * `visibilitychange`, que dispara al volver en vez de esperar al tick.
+ */
+const SYNC_EVERY_MS = 30_000;
 
 function AppInner() {
   const view = useStore((s) => s.view);
@@ -174,6 +186,36 @@ function AppInner() {
       window.removeEventListener("online", sincronizar);
       document.removeEventListener("visibilitychange", alVolver);
       window.removeEventListener("focus", sincronizar);
+    };
+  }, [session, syncNow]);
+
+  // ── Mirar la nube cada 30 s mientras la app está a la vista ─────────────────
+  //
+  // Con lo anterior ya no había ningún fallo: los cambios llegaban. Faltaba lo
+  // contrario, y es el caso de uso normal de dos dispositivos: tener la app
+  // abierta y en primer plano, crear algo en el otro móvil, y mirar esta
+  // pantalla. No había nada que la despertara —ni temporizador, ni polling, ni
+  // websocket—, así que la respuesta era «nunca». No era lento: era indefinido.
+  //
+  // La lógica vive en `store/poller` y no aquí para poder probarla: un
+  // `setInterval` dentro de un `useEffect` no se mide, se supone. Y ya se ha
+  //.supuesto mal bastante veces.
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const poller = arrancarPoller({
+      cadaMs: SYNC_EVERY_MS,
+      sincronizar: syncNow,
+      visible: () => document.visibilityState === "visible",
+    });
+    // Al volver del segundo plano no se espera al siguiente tick: si alguien
+    // estuvo un rato en otra app, esa espera es justo lo que se nota.
+    const alVolver = () => {
+      if (document.visibilityState === "visible") poller.alVolver();
+    };
+    document.addEventListener("visibilitychange", alVolver);
+    return () => {
+      poller.parar();
+      document.removeEventListener("visibilitychange", alVolver);
     };
   }, [session, syncNow]);
 
