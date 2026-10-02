@@ -107,10 +107,22 @@ vi.mock("../supabase", () => ({
 }));
 
 // ─── Mock de Dexie ────────────────────────────────────────────────────────────
+// `patchTask`/`patchProject` reproducen la semantica de db.ts: sellan
+// `updatedAt` salvo que quien escribe traiga su propia fecha. Importarlos de
+// verdad metería IndexedDB real en un fichero cuyo objeto es probar QUE se
+// llama a Supabase, no como se guarda.
 vi.mock("../db", () => ({
   db: mockDb,
   stampNow: () => new Date().toISOString(),
   newId: () => crypto.randomUUID(),
+  patchTask: async (id: string, changes: Record<string, unknown>) => {
+    const conFecha = "updatedAt" in changes ? changes : { ...changes, updatedAt: new Date().toISOString() };
+    return mockDb.tasks.update(id, conFecha);
+  },
+  patchProject: async (id: string, changes: Record<string, unknown>) => {
+    const conFecha = "updatedAt" in changes ? changes : { ...changes, updatedAt: new Date().toISOString() };
+    return mockDb.projects.update(id, conFecha);
+  },
 }));
 
 // ─── Mock de useStore (zustand) ──────────────────────────────────────────────

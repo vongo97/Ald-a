@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+﻿import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { Task, Project } from "@/domain/types";
 
 /**
@@ -7,8 +7,8 @@ import type { Task, Project } from "@/domain/types";
  * Por que este fichero existe: el bug de resurreccion (una tarea borrada
  * reaparecia como activa en un dispositivo limpio) vivia aqui, en
  * `deleteTask`/`deleteProject`, y no habia ni un solo test sobre este modulo.
- * Estos tests atacan la mitad del protocolo que faltaba — que el borrado
- * suba la fila y no solo la tombstone — y la cascada, que es donde un error
+ * Estos tests atacan la mitad del protocolo que faltaba â€” que el borrado
+ * suba la fila y no solo la tombstone â€” y la cascada, que es donde un error
  * destructa mas.
  *
  * `sync.ts` va doblado por completo: aqui no se prueba la red (eso es cosa de
@@ -17,7 +17,7 @@ import type { Task, Project } from "@/domain/types";
  * la clave compuesta `[kind+id]` de las tumbas se comporten de verdad.
  */
 
-// ─── Doble de sync.ts: registra las llamadas, no hace red ────────────────────
+// â”€â”€â”€ Doble de sync.ts: registra las llamadas, no hace red â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const {
   pushDeletedTasks,
   pushDeletedProjects,
@@ -47,6 +47,7 @@ vi.mock("../sync", () => ({
 }));
 
 import { db } from "../db";
+import { mergeDecision } from "../merge";
 import {
   deleteTask,
   deleteProject,
@@ -54,10 +55,11 @@ import {
   restoreProject,
   createProject,
   createTaskFromCapture,
+  toggleTask,
   updateTask,
 } from "../actions";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let seq = 0;
 
 function makeTask(over: Partial<Task> = {}): Task {
@@ -80,21 +82,21 @@ async function seed(...tasks: Task[]): Promise<void> {
 }
 
 /**
- * Los ids que recibió la última llamada a un push.
+ * Los ids que recibiÃ³ la Ãºltima llamada a un push.
  *
  * Acepta por lotes (`autoPushTasks([t1, t2])`) y por fila suelta
- * (`autoPushTask(t)`), que es como el código real los usa.
+ * (`autoPushTask(t)`), que es como el cÃ³digo real los usa.
  */
 function idsOf(call: ReturnType<typeof vi.fn>): string[] {
   const args: unknown[] = call.mock.calls.at(-1) ?? [];
-  // Un lote (`[t1, t2]`) o una fila suelta (`t`). Un `[]` es un lote vacío.
+  // Un lote (`[t1, t2]`) o una fila suelta (`t`). Un `[]` es un lote vacÃ­o.
   const rows = (args.length === 1 && !Array.isArray(args[0]) ? [args[0]] : args[0] ?? []) as Array<{
     id: string;
   }>;
   return rows.map((r) => r.id);
 }
 
-/** Las filas (no solo los ids) del último push, para aserciones de contenido. */
+/** Las filas (no solo los ids) del Ãºltimo push, para aserciones de contenido. */
 function rowsOf<T>(call: ReturnType<typeof vi.fn>): T[] {
   const args: unknown[] = call.mock.calls.at(-1) ?? [];
   const rows = (args.length === 1 && !Array.isArray(args[0]) ? [args[0]] : args[0] ?? []) as T[];
@@ -111,7 +113,7 @@ beforeEach(async () => {
   ]) m.mockClear();
 });
 
-// ─── deleteTask: la fila sube marcada, no solo la tombstone ─────────────────
+// â”€â”€â”€ deleteTask: la fila sube marcada, no solo la tombstone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 describe("deleteTask", () => {
   it("marca la tarea como borrada en local", async () => {
     const t = makeTask({ title: "Se va" });
@@ -138,7 +140,7 @@ describe("deleteTask", () => {
     expect(rows[0].deletedAt).toBeTruthy();
   });
 
-  it("NO sube la fila por la vía de las vivas (autoPushTasks)", async () => {
+  it("NO sube la fila por la vÃ­a de las vivas (autoPushTasks)", async () => {
     const t = makeTask();
     await seed(t);
 
@@ -222,7 +224,7 @@ describe("deleteTask", () => {
   });
 });
 
-// ─── deleteProject: el proyecto se borra, las tareas se desenganchan ─────────
+// â”€â”€â”€ deleteProject: el proyecto se borra, las tareas se desenganchan â”€â”€â”€â”€â”€â”€â”€â”€â”€
 describe("deleteProject", () => {
   async function seedProjectWith(...tasks: Task[]): Promise<Project> {
     const p = await createProject("Trabajo", "#38bdf8");
@@ -254,7 +256,7 @@ describe("deleteProject", () => {
 
     await deleteProject(p.id);
 
-    // Las tareas no se borran, pierden el proyecto. Si se subieran por la vía
+    // Las tareas no se borran, pierden el proyecto. Si se subieran por la vÃ­a
     // de las borradas desaparecerian de la Papelera sin que nadie las metiera.
     const rows = rowsOf<Task>(pushTasks);
     expect(rows).toHaveLength(2);
@@ -268,7 +270,7 @@ describe("deleteProject", () => {
     }
   });
 
-  it("no sube por la vía de borradas las tareas desenganchadas", async () => {
+  it("no sube por la vÃ­a de borradas las tareas desenganchadas", async () => {
     const p = await seedProjectWith(makeTask());
 
     await deleteProject(p.id);
@@ -278,7 +280,7 @@ describe("deleteProject", () => {
   });
 });
 
-// ─── restoreTask: el espejo del borrado ─────────────────────────────────────
+// â”€â”€â”€ restoreTask: el espejo del borrado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 describe("restoreTask", () => {
   it("quita deletedAt y sube la fila restaurada", async () => {
     const t = makeTask();
@@ -329,7 +331,7 @@ describe("restoreTask", () => {
   });
 });
 
-// ─── restoreProject ──────────────────────────────────────────────────────────
+// â”€â”€â”€ restoreProject â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 describe("restoreProject", () => {
   it("restaura el proyecto y lo sube con autoRestoreProjects", async () => {
     const p = await createProject("Trabajo", "#38bdf8");
@@ -351,7 +353,7 @@ describe("restoreProject", () => {
   });
 });
 
-// ─── updateTask: el sello de updatedAt ───────────────────────────────────────
+// â”€â”€â”€ updateTask: el sello de updatedAt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 describe("updateTask", () => {
   it("sella updatedAt al editar y sube la fila", async () => {
     const t = makeTask({ title: "Antes" });
@@ -379,7 +381,7 @@ describe("updateTask", () => {
   });
 });
 
-// ─── createTaskFromCapture: el camino que nace de la captura rapida ──────────
+// â”€â”€â”€ createTaskFromCapture: el camino que nace de la captura rapida â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 describe("createTaskFromCapture", () => {
   // `ParsedCapture` es la salida del parser, no la entrada cruda: las fechas
   // ya vienen resueltas a ISO. Aqui se prueba el ensamblado de la tarea, que es
@@ -449,5 +451,96 @@ describe("createTaskFromCapture", () => {
 
     expect(created.parentId).toBe("raiz-1");
     expect(created.order).toBe(7);
+  });
+});
+describe("REGRESION: editar sin conexion no puede perderse", () => {
+  // Este es el fallo mas caro que ha tenido la app, y no daba ningun error.
+  //
+  // `updatedAt` era el reloj de la sincronizacion, y habia un hook de Dexie
+  // encargo de sellarlo en cada escritura. No lo hacia: Dexie entrega al hook
+  // `updating` las modificaciones ya combinadas con el registro guardado,
+  // `updatedAt` incluido, asi que el guard `"updatedAt" in mods` era siempre
+  // verdadero y nunca sellaba. El hook se disparaba y no hacia nada.
+  //
+  // Con la fecha clavada desde la creacion, `needsPush` â€”que exige que lo local
+  // sea ESTRICTAMENTE mas recienteâ€” veia empate siempre. De ahi la perdida:
+  //
+  //   1. La tarea ya esta en la nube.
+  //   2. Editas sin conexion. El `autoPushTask` inmediato falla (sin red) y no
+  //      avisa: es `void`.
+  //   3. Vuelve la conexion y arranca el push del siguiente ciclo.
+  //   4. `needsPush` dice "no" -> la edicion NUNCA llega a la nube.
+  //
+  // Es exactamente el caso que un usuario pide probar ("prueba el offline") y
+  // que la app perdia en silencio.
+
+  const NUBE = "2026-06-01T10:00:00.000Z";
+
+  async function tareaEnLaNubeYEnLocal(): Promise<Task> {
+    const t = await createTaskFromCapture({ title: "Tarea compartida", labels: [], matched: [] });
+    // La nube la conoce con esta fecha. El reloj local la crea "ahora", asÃ­ que
+    // hay que rebobinar la copia local para simular "los dos al dÃ­a".
+    await db.tasks.update(t.id, { updatedAt: NUBE });
+    return { ...t, updatedAt: NUBE };
+  }
+
+it("tras editar sin conexion, la fila local queda MAS NUEVA que la nube", async () => {
+    const tarea = await tareaEnLaNubeYEnLocal();
+
+    await updateTask(tarea.id, { title: "Editada sin conexion" });
+
+    const local = (await db.tasks.get(tarea.id))!;
+    // Esto es justo la condicion que evalua `needsPush` (exige que lo local sea
+    // mas reciente). Con la fecha clavada daba empate, devolvia false, y la
+    // edicion se quedaba en el movil para siempre. Se comprueba la condicion
+    // aqui en vez de llamar a `needsPush` porque `sync.ts` va doblado en este
+    // fichero, y su logica tiene sus propios tests en sync.test.ts.
+    expect(Date.parse(local.updatedAt!)).toBeGreaterThan(Date.parse(NUBE));
+  });
+
+  it("tras completar sin conexion, tambien avanza la fecha", async () => {
+    const tarea = await tareaEnLaNubeYEnLocal();
+
+    await toggleTask(tarea);
+
+    const local = (await db.tasks.get(tarea.id))!;
+    expect(local.status).toBe("done");
+    expect(Date.parse(local.updatedAt!)).toBeGreaterThan(Date.parse(NUBE));
+  });
+
+  it("tras editar dos veces, gana la segunda", async () => {
+    // Ordenables, que es lo que hace falta para que un merge signifique algo.
+    const tarea = await tareaEnLaNubeYEnLocal();
+
+    await updateTask(tarea.id, { title: "primera" });
+    const tras1 = (await db.tasks.get(tarea.id))!.updatedAt!;
+    await new Promise((r) => setTimeout(r, 5));
+    await updateTask(tarea.id, { title: "segunda" });
+    const tras2 = (await db.tasks.get(tarea.id))!.updatedAt!;
+
+    expect(Date.parse(tras2)).toBeGreaterThan(Date.parse(tras1));
+  });
+
+  it("y contra otro dispositivo, el mas reciente gana de verdad", async () => {
+    // El otro movil subio su edicion DESPUES de la nuestra offline. Antes del
+    // arreglo ambas filas tenian la fecha de creacion, `mergeDecision` resolvia
+    // el empate a favor de lo local, y cada dispositivo se quedaba con su
+    // version para siempre, sin converger jamas.
+    const tarea = await tareaEnLaNubeYEnLocal();
+    await updateTask(tarea.id, { title: " mia offline" });
+
+    const local = (await db.tasks.get(tarea.id))!;
+    const otroMasNuevo = { updatedAt: new Date(Date.parse(local.updatedAt!) + 60_000).toISOString() };
+
+    expect(mergeDecision(local, otroMasNuevo)).toBe("take-remote");
+  });
+
+  it("el push inmediato se sigue disparando (eso no ha cambiado)", async () => {
+    const tarea = await tareaEnLaNubeYEnLocal();
+    pushTask.mockClear();
+
+    await updateTask(tarea.id, { title: "cualquier cosa" });
+
+    expect(pushTask).toHaveBeenCalledTimes(1);
   });
 });

@@ -43,19 +43,52 @@ db.tasks.hook("creating", (_primKey, obj) => {
   const target = obj as unknown as Task;
   if (!target.updatedAt) target.updatedAt = stampNow();
 });
-db.tasks.hook("updating", (modifications) => {
-  const mods = modifications as unknown as Partial<Task>;
-  if (!("updatedAt" in mods)) mods.updatedAt = stampNow();
-});
 
 db.projects.hook("creating", (_primKey, obj) => {
   const target = obj as unknown as Project;
   if (!target.updatedAt) target.updatedAt = stampNow();
 });
-db.projects.hook("updating", (modifications) => {
-  const mods = modifications as unknown as Partial<Project>;
-  if (!("updatedAt" in mods)) mods.updatedAt = stampNow();
-});
+
+/**
+ * Actualización parcial que SELLA `updatedAt`, salvo que quien llame traiga su
+ * propia fecha (el pull de la nube y la importación de un backup respetan la
+ * fecha del autor).
+ *
+ * ── Por qué esto NO es un hook ────────────────────────────────────────────
+ *
+ * Aquí hubo un hook `updating` con la intención de sellar la fecha sola:
+ *
+ *   db.tasks.hook("updating", (mods) => {
+ *     if (!("updatedAt" in mods)) mods.updatedAt = stampNow();
+ *   });
+ *
+ * Parecía funcionar, pero no lo hacía NUNCA. Dexie no entrega a ese hook solo
+ * lo que el llamante pasó: le entrega las modificaciones YA combinadas con el
+ * registro guardado, `updatedAt` incluido. Así que `"updatedAt" in mods` era
+ * siempre true y el `if` nunca entraba. El hook se disparaba, se leía, y no
+ * sellaba nada. Un fallo silencioso: no daba error, solo una fecha congelada.
+ *
+ * Eso era grave porque `updatedAt` es el reloj de toda la sincronización:
+ * `needsPush` sube solo lo local MÁS RECIENTE, y `mergeDecision` hace ganar al
+ * más reciente. Con la fecha clavada desde la creación, ni una edición ni un
+ * "completar" eran más recientes que nada, así que:
+ *
+ *  - Una edición hecha sin conexión NO se subía al reconectar: `needsPush` ve
+ *    empate y dice que no. El trabajo offline se perdía en silencio.
+ *  - Dos dispositivos nunca convergían: empate para los dos, cada uno se
+ *    queda con su versión, para siempre.
+ *
+ * `patchTask` / `patchProject` hacen el sellado explícito y en un sitio solo.
+ * Un test (`db.test.ts`) impide que vuelva a colarse un `db.tasks.update()`
+ * suelto por ahí.
+ */
+export async function patchTask(id: string, changes: Partial<Task>): Promise<void> {
+  await db.tasks.update(id, "updatedAt" in changes ? changes : { ...changes, updatedAt: stampNow() });
+}
+
+export async function patchProject(id: string, changes: Partial<Project>): Promise<void> {
+  await db.projects.update(id, "updatedAt" in changes ? changes : { ...changes, updatedAt: stampNow() });
+}
 
 const uid = (): string =>
   crypto.randomUUID?.() ?? `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;

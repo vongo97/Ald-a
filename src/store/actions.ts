@@ -1,4 +1,4 @@
-import { db, newId, stampNow } from "./db";
+import { db, newId, patchProject, patchTask, stampNow } from "./db";
 import type { ParsedCapture } from "@/parsers/capture";
 import type { Project, Task } from "@/domain/types";
 import { nextOccurrence } from "@/domain/recurrence";
@@ -16,7 +16,7 @@ export async function createProject(name: string, color: string): Promise<Projec
 }
 
 export async function updateProject(id: string, changes: Partial<Project>): Promise<void> {
-  await db.projects.update(id, changes);
+  await patchProject(id, changes);
   const updated = await db.projects.get(id);
   if (updated) void autoPushProject(updated);
 }
@@ -29,7 +29,7 @@ export async function deleteProject(id: string): Promise<void> {
     await db.tasks.where("projectId").equals(id).modify({ projectId: undefined });
     // Borrado suave: marcamos deletedAt y creamos tumba.
     const now = stampNow();
-    await db.projects.update(id, { deletedAt: now });
+    await patchProject(id, { deletedAt: now });
     await db.tombstones.put({ id, kind: "projects", updatedAt: now });
   });
 
@@ -77,7 +77,7 @@ export async function createTaskFromCapture(
 }
 
 export async function updateTask(id: string, changes: Partial<Task>): Promise<void> {
-  await db.tasks.update(id, changes);
+  await patchTask(id, changes);
   const updated = await db.tasks.get(id);
   if (updated) void autoPushTask(updated);
 }
@@ -101,9 +101,9 @@ export async function toggleTask(task: Task): Promise<void> {
       await db.tasks.put(nextTask);
       void autoPushTask(nextTask);
     }
-    await db.tasks.update(task.id, changes);
+    await patchTask(task.id, changes);
   } else {
-    await db.tasks.update(task.id, { status: "todo", completedAt: undefined });
+    await patchTask(task.id, { status: "todo", completedAt: undefined });
   }
   const updated = await db.tasks.get(task.id);
   if (updated) void autoPushTask(updated);
@@ -134,7 +134,7 @@ export async function deleteTask(id: string): Promise<void> {
   await db.transaction("rw", db.tasks, db.tombstones, async () => {
     const now = stampNow();
     for (const t of toDelete) {
-      await db.tasks.update(t.id, { deletedAt: now });
+      await patchTask(t.id, { deletedAt: now });
       await db.tombstones.put({ id: t.id, kind: "tasks", updatedAt: now });
     }
   });
@@ -270,7 +270,7 @@ export async function addSubtasks(
 export async function reorderTasks(orderedIds: string[]): Promise<void> {
   await db.transaction("rw", db.tasks, async () => {
     for (let i = 0; i < orderedIds.length; i++) {
-      await db.tasks.update(orderedIds[i], { order: i });
+      await patchTask(orderedIds[i], { order: i });
     }
   });
   // El orden vive en `order`, así que hay que subirlo: antes se quedaba solo en local.
@@ -287,7 +287,7 @@ export async function applyReprogramming(
 ): Promise<void> {
   await db.transaction("rw", db.tasks, async () => {
     for (const p of proposals) {
-      await db.tasks.update(p.taskId, { dueDate: p.toDate });
+      await patchTask(p.taskId, { dueDate: p.toDate });
     }
   });
   // Reprogramar es un cambio de fecha: antes no llegaba nunca a la nube.

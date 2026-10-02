@@ -1,4 +1,4 @@
-import { db, stampNow } from "./db";
+import { db, patchProject, patchTask, stampNow } from "./db";
 import { supabase } from "./supabase";
 import { mergeDecision, timestamp, type SyncRecord } from "./merge";
 import { useStore } from "./useStore";
@@ -264,7 +264,7 @@ export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
           await db.projects.put(remote);
           pulledProjects++;
         } else if (local && !local.updatedAt) {
-          await db.projects.update(local.id, { updatedAt: stampNow() });
+          await patchProject(local.id, { updatedAt: stampNow() });
         }
       }
       for (const raw of tData ?? []) {
@@ -274,7 +274,7 @@ export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
           await db.tasks.put(remote);
           pulledTasks++;
         } else if (local && !local.updatedAt) {
-          await db.tasks.update(local.id, { updatedAt: stampNow() });
+          await patchTask(local.id, { updatedAt: stampNow() });
         }
       }
 
@@ -295,13 +295,22 @@ export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
         if (raw.kind === "tasks") {
           const local = await db.tasks.get(raw.id);
           if (local && (!local.deletedAt || timestamp(local.deletedAt) < remoteTime)) {
-            await db.tasks.update(raw.id, { deletedAt: raw.updated_at });
+            // `updatedAt` va con la fecha de la tumba a propósito. La fila acaba
+            // de cambiar de estado AHORA, y su reloj tiene que reflejarlo:
+            //
+            //  - Deja la copia local MÁS RECIENTE que la que quedó en la nube
+            //    (que puede venir con `deleted_at = null` de cuando el protocolo
+            //    de borrado estaba a medias). Así el siguiente push sube el
+            //    `deleted_at` y esa fila se repara sola.
+            //  - Si el `updatedAt` se dejara clavado, `needsPush` vería empate y
+            //    no subiría nada: la reparación nunca ocurriría.
+            await patchTask(raw.id, { deletedAt: raw.updated_at, updatedAt: raw.updated_at });
             remoteDeletes++;
           }
         } else if (raw.kind === "projects") {
           const local = await db.projects.get(raw.id);
           if (local && (!local.deletedAt || timestamp(local.deletedAt) < remoteTime)) {
-            await db.projects.update(raw.id, { deletedAt: raw.updated_at });
+            await patchProject(raw.id, { deletedAt: raw.updated_at, updatedAt: raw.updated_at });
             remoteDeletes++;
           }
         }
