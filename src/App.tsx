@@ -131,11 +131,18 @@ function AppInner() {
   //hasta que recargaba, y no tenía forma de saber si ya había subido. Para una
   //PWA eso es exactamente lo que no debería pasar: si la app puede funcionar
   //sin red, también debe recuperarse sola cuando la red vuelve.
+  //
+  // Y no basta con escuchar «online»: ese evento se pierde si llega mientras la
+  //página está congelada o en segundo plano, que es justo lo que hacen los
+  //navegadores con las PWA. El caso real es volver a abrir la app con red y
+  //que la tarea siga sin subir. Por eso también se sincroniza al volver al
+  //primer plano: es la señal de «ahora puedes subirlo» que no depende de haber
+  //visto el instante exacto en que volvió la red.
   useEffect(() => {
     if (!session?.user?.id) return;
     let sincronizando = false;
 
-    const alVolverLaRed = () => {
+    const sincronizar = () => {
       if (sincronizando) return;
       sincronizando = true;
       void syncNow().finally(() => {
@@ -143,8 +150,21 @@ function AppInner() {
       });
     };
 
-    window.addEventListener("online", alVolverLaRed);
-    return () => window.removeEventListener("online", alVolverLaRed);
+    window.addEventListener("online", sincronizar);
+    // `visibilitychange` cubre móvil y PWA; `focus` cubre escritorio, donde el
+    // evento online sí llega pero la pestaña puede haber estado en segundo
+    // plano. Los dos son baratos: si no hay nada que subir, el push no hace
+    // ni una petición.
+    const alVolver = () => {
+      if (document.visibilityState === "visible") sincronizar();
+    };
+    document.addEventListener("visibilitychange", alVolver);
+    window.addEventListener("focus", sincronizar);
+    return () => {
+      window.removeEventListener("online", sincronizar);
+      document.removeEventListener("visibilitychange", alVolver);
+      window.removeEventListener("focus", sincronizar);
+    };
   }, [session, syncNow]);
 
   // Desglose automático: las capturas que quedaron como bloque de texto
