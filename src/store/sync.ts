@@ -363,7 +363,11 @@ export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("Sync falló (lo local se conserva):", err);
-    useStore.getState().setSyncStatus("error", msg);
+    // Aquí también: una caída de red puede llegar como excepción lanzada en
+    // cualquier punto del ciclo, no solo como el `{ error }` del cliente. Sin
+    // esta línea, estar en modo avión daba un punto rojo de alarma por la vía
+    // que el cliente decide lanzar en vez de devolver.
+    useStore.getState().setSyncStatus(esCaidaDeRed(err) ? "offline" : "error", msg);
     return null;
   }
 }
