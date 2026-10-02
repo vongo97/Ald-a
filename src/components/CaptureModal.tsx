@@ -3,7 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/store/db";
 import { useStore } from "@/store/useStore";
 import { useSettings } from "@/store/SettingsContext";
-import { createTaskFromCapture, addSubtasks } from "@/store/actions";
+import { createTaskFromCapture, updateTask, addSubtasks } from "@/store/actions";
 import { loadProfile } from "@/store/profile";
 import { parseCapture, stripDayCommands, isDayCommandWord, type ParsedCapture } from "@/parsers/capture";
 import { improveCapture, type CaptureSubtask } from "@/llm/tasks";
@@ -53,83 +53,96 @@ export default function CaptureModal() {
   const submit = async () => {
     if (!text.trim()) return closeCapture();
     const parsedNow = parseCapture(text, { projects: projects ?? [] });
-    const long = text.trim().length >= STRUCTURE_MIN_CHARS;
-    // Motivo del último intento fallido (para no fallar en silencio).
-    let failMsg: string | null = null;
+    const original = text.trim();
+    const long = original.length >= STRUCTURE_MIN_CHARS;
 
-    // Texto largo + IA disponible → estructurar de una vez: la IA propone un
-    // título corto (¡no el párrafo entero!) y las subtareas que contiene el
-    // texto, con sus horas si las trae. Si la IA falla, se crea tal cual y se
-    // avisa (antes el fallo era invisible y parecía que la IA no hacía nada).
-    if (long && settings.apiKey.trim()) {
-      setImproving(true);
-      let structured: { parsed: ParsedCapture; subtasks: CaptureSubtask[] } | null = null;
-      try {
-        // "@lunes" no se le pasa a la IA: quien manda en recurrencia y fecha
-        // es el parser local (y así no lo devuelve como etiqueta).
-        const res = await improveCapture({ settings }, stripDayCommands(text), loadProfile());
-        if (res.ok && res.data?.title.trim() && res.data.title.trim().length <= 160) {
-          const imp = res.data;
-          const prio: Priority | undefined =
-            typeof imp.priority === "number" && imp.priority >= 1 && imp.priority <= 4
-              ? (imp.priority as Priority)
-              : undefined;
-          structured = {
-            parsed: {
-              ...parsedNow,
-              // El título lo propone la IA; el parser local manda en lo que
-              // ya detecta bien (#proyecto, recurrencia, fechas relativas).
-              title: imp.title.trim(),
-              dueDate: parsedNow.dueDate || imp.dueDate || undefined,
-              dueTime: parsedNow.dueTime || imp.dueTime || undefined,
-              priority: parsedNow.priority ?? prio,
-              // La IA puede devolver "lunes" como etiqueta: ya es un comando
-              // de día, no una etiqueta.
-              labels: [...new Set([...parsedNow.labels, ...(imp.labels ?? [])])].filter(
-                (l) => !isDayCommandWord(l),
-              ),
-            },
-            subtasks: imp.subtasks ?? [],
-          };
-        } else {
-          failMsg = (!res.ok
-            ? (res.error ?? "error desconocido")
-            : "la IA devolvió el texto entero como título"
-          ).slice(0, 90);
-        }
-      } catch (err) {
-        failMsg = (err instanceof Error ? err.message : String(err)).slice(0, 90);
-      }
-      setImproving(false);
+    // ── PASO 1: que la tarea exista. Siempre, y sin esperar a nadie. ──────────
+    //
+    // Aquí estaba el fallo: una captura de 120 caracteres o más, con clave de IA
+    // puesta, esperaba a la IA ANTES de crear nada. La espera es de 20 s por
+    // intento y hay tres intentos: 62,4 s medidos en el navegador. Durante ese
+    // minuto el modal ponía «Mejorando...» y Enter no hacía nada, que es
+    // exactamente lo que se ve desde un tren. Y si la IA contestaba, se
+    // guardaba el título corto que proponía ella en lugar del texto escrito.
+    //
+    // Guardar es local y va primero. Todo lo demás es una mejora opcional y por
+    // eso llega después: el botón «✨ Mejorar con IA» está justo debajo, a un
+    // toque, y hace exactamente esto.
+    //
+    // El texto largo se conserva en `notes` para no perderlo de vista: es lo que
+    // se vuelve a mirar si luego se quiere desglosar.
+    const parent = await createTaskFromCapture(parsedNow, long ? { notes: original } : {});
 
-      if (structured) {
-        // El párrafo original se conserva en `notes` si la IA lo acortó.
-        const original = text.trim();
-        const parent = await createTaskFromCapture(
-          structured.parsed,
-          original !== structured.parsed.title ? { notes: original } : {},
-        );
-        const n = structured.subtasks.length;
-        if (n > 0) await addSubtasks(parent, structured.subtasks);
-        pushToast(
-          n > 0
-            ? `✨ «${parent.title}» + ${n} subtareas`
-            : `✨ «${parent.title}» creada — la IA no propuso subtareas`,
-        );
-        setText("");
-        closeCapture();
-        return;
-      }
-    }
-
-    const parent = await createTaskFromCapture(parsedNow);
-    pushToast(
-      failMsg
-        ? `⚠️ No se pudo estructurar: ${failMsg}. Tarea creada tal cual.`
-        : long && !settings.apiKey.trim()
+    if (!long || !settings.apiKey.trim()) {
+      pushToast(
+        long && !settings.apiKey.trim()
           ? "Tarea creada — configura la IA en Ajustes y los textos largos se dividirán en subtareas"
           : `Tarea creada: ${parent.title}`,
-    );
+      );
+      setText("");
+      closeCapture();
+      return;
+    }
+
+    // ── PASO 2: con la tarea ya a salvo, structuring es un extras. ───────────
+    // Falla, se cae la red o el usuario cierra el modal: la tarea sigue ahí.
+    setImproving(true);
+    let failMsg: string | null = null;
+    let structured: { parsed: ParsedCapture; subtasks: CaptureSubtask[] } | null = null;
+    try {
+      // "@lunes" no se le pasa a la IA: quien manda en recurrencia y fecha
+      // es el parser local (y así no lo devuelve como etiqueta).
+      const res = await improveCapture({ settings }, stripDayCommands(text), loadProfile());
+      if (res.ok && res.data?.title.trim() && res.data.title.trim().length <= 160) {
+        const imp = res.data;
+        const prio: Priority | undefined =
+          typeof imp.priority === "number" && imp.priority >= 1 && imp.priority <= 4
+            ? (imp.priority as Priority)
+            : undefined;
+        structured = {
+          parsed: {
+            ...parsedNow,
+            // El título lo propone la IA; el parser local manda en lo que
+            // ya detecta bien (#proyecto, recurrencia, fechas relativas).
+            title: imp.title.trim(),
+            dueDate: parsedNow.dueDate || imp.dueDate || undefined,
+            dueTime: parsedNow.dueTime || imp.dueTime || undefined,
+            priority: parsedNow.priority ?? prio,
+            // La IA puede devolver "lunes" como etiqueta: ya es un comando
+            // de día, no una etiqueta.
+            labels: [...new Set([...parsedNow.labels, ...(imp.labels ?? [])])].filter(
+              (l) => !isDayCommandWord(l),
+            ),
+          },
+          subtasks: imp.subtasks ?? [],
+        };
+      } else {
+        failMsg = (
+          !res.ok ? (res.error ?? "error desconocido") : "la IA devolvió el texto entero como título"
+        ).slice(0, 90);
+      }
+    } catch (err) {
+      failMsg = (err instanceof Error ? err.message : String(err)).slice(0, 90);
+    }
+    setImproving(false);
+
+    if (structured) {
+      // Se MEJORA la tarea ya creada, no se crea otra: si no, el modal dejaría
+      // dos tareas y la persona se encontraría un duplicado sin explicación.
+      // `notes` no se toca: el texto original sigue ahí.
+      const { title, ...resto } = structured.parsed;
+      await updateTask(parent.id, { title, ...resto });
+      const n = structured.subtasks.length;
+      if (n > 0) await addSubtasks(parent, structured.subtasks);
+      pushToast(
+        n > 0 ? `✨ «${title}» + ${n} subtareas` : `✨ «${title}» — la IA no propuso subtareas`,
+      );
+    } else if (failMsg) {
+      // La tarea se creó igual: el texto largo está en `notes` y se puede
+      // volver a intentar con «✨ Mejorar con IA».
+      pushToast(`⚠️ No se pudo estructurar: ${failMsg}. Tarea creada tal cual.`);
+    }
+
     setText("");
     closeCapture();
   };
