@@ -81,6 +81,29 @@ describe("comandos @día", () => {
     expect(r.recurrence).toEqual({ kind: "weekly", every: 1, weekdays: [1] });
   });
 
+  // El caso que se escribió de verdad: "los viernes" sin "cada" ni "todos los".
+  // Antes el día se quedaba por el camino y la rutina salía sin día fijo.
+  it("«los <día>» a secas se lee como rutina y se quita del título", () => {
+    const r = parseCapture("Gimnasio los martes", { now: T });
+    expect(r.title).toBe("Gimnasio");
+    expect(r.labels).toEqual([]);
+    expect(r.recurrence).toEqual({ kind: "weekly", every: 1, weekdays: [2] });
+    expect(r.dueDate).toBe("2026-09-29"); // próximo martes
+  });
+
+  it("«los <día>» no se come un singular: «el martes» es una fecha", () => {
+    const r = parseCapture("Gimnasio el martes", { now: T });
+    expect(r.recurrence).toBeUndefined();
+    expect(r.dueDate).toBe("2026-09-29");
+  });
+
+  it("lista de días en texto plano: «los lunes y miércoles»", () => {
+    const r = parseCapture("Estudio los lunes y miércoles", { now: T });
+    expect(r.title).toBe("Estudio");
+    expect(r.recurrence).toEqual({ kind: "weekly", every: 1, weekdays: [1, 3] });
+    expect(r.dueDate).toBe("2026-09-23"); // el miércoles, no el lunes
+  });
+
   it("fusiona con la recurrencia semanal del texto: «todos los lunes @miércoles»", () => {
     const r = parseCapture("Todos los lunes @miércoles", { now: T });
     expect(r.recurrence).toEqual({ kind: "weekly", every: 1, weekdays: [1, 3] });

@@ -89,12 +89,28 @@ export function parseDate(input: string, today: Date = new Date()): DateParse {
     consume(m);
   }
 
-  // "cada lunes", "todos los lunes" → semanal con día fijo
-  m = text.match(/\b(?:cada|todos los|todas las)\s+(domingos?|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bados?)/);
+  // "cada viernes", "todos los viernes" y —como lo escribe la gente— "los
+  // viernes" a secas → semanal con día fijo. También la lista: "los lunes y
+  // miércoles". El plural suelto NO es una fecha puntual: "el viernes" sí lo es
+  // (más abajo), "los viernes" es una rutina, y por eso el artículo decide.
+  const DIAS = "domingos?|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bados?";
+  m = text.match(new RegExp(`\\b(?:todos los|todas las|cada|los)\\s+(${DIAS})`));
   if (m) {
-    recurrence = { kind: "weekly", every: 1, weekdays: [WEEKDAYS[normalizeWeekday(m[1])]] };
+    const dias = [WEEKDAYS[normalizeWeekday(m[1])]];
     consume(m);
-    date = nextWeekday(today, WEEKDAYS[normalizeWeekday(m[1])]);
+    // Seguir la lista: "los lunes y miércoles", "los martes, jueves".
+    let cola = text.slice((m.index ?? 0) + m[0].length);
+    const SIGUE = new RegExp(`^\\s*(?:,|y)\\s+(?:los\\s+)?(${DIAS})\\b`);
+    let sig: RegExpMatchArray | null;
+    while ((sig = cola.match(SIGUE))) {
+      const wd = WEEKDAYS[normalizeWeekday(sig[1])];
+      if (wd !== undefined && !dias.includes(wd)) dias.push(wd);
+      matched.push(sig[0].trim());
+      cola = cola.slice(sig[0].length);
+    }
+    dias.sort((a, b) => a - b);
+    recurrence = { kind: "weekly", every: 1, weekdays: dias };
+    date = proximaDeTusDias(today, dias);
   }
 
   // "el primer lunes del mes", "el último viernes del mes" — va ANTES que los
@@ -236,6 +252,17 @@ function nextWeekday(from: Date, weekday: number): Date {
   const d = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 12);
   const delta = (weekday - d.getDay() + 7) % 7;
   return addDays(d, delta === 0 ? 7 : delta);
+}
+
+/**
+ * Próxima aparición de CUALQUIERA de los días marcados — no del primero de la
+ * lista. "Los lunes y miércoles" un jueves debe caer en el lunes, y si el lunes
+ * es hoy mismo, en el siguiente (igual que `nextWeekday`).
+ */
+function proximaDeTusDias(from: Date, dias: number[]): Date {
+  return dias
+    .map((wd) => nextWeekday(from, wd))
+    .reduce((a, b) => (a.getTime() <= b.getTime() ? a : b));
 }
 
 function nthWeekdayOfMonthDate(year: number, month: number, nth: number, weekday: number): Date {

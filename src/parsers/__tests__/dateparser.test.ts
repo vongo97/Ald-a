@@ -79,4 +79,60 @@ describe("parseDate (español)", () => {
     expect(r.date).toBe("2026-10-05"); // primer lunes de octubre
     expect(r.recurrence).toEqual({ kind: "monthly", every: 1, nthWeekday: { nth: 1, weekday: 1 } });
   });
+
+  // --- "los <día>" a secas: el plural ES la seña de rutina -------------------
+  // "los viernes" es como se dice. Antes solo se entendía "cada viernes" o
+  // "todos los viernes", así que una rutina tan natural salía como
+  // semanal-sin-día o directamente sin leer.
+  describe("plural suelto (como lo dice la gente)", () => {
+    it("los viernes", () => {
+      const r = parseDate("Revisión semanal los viernes", T);
+      expect(r.recurrence).toEqual({ kind: "weekly", every: 1, weekdays: [5] });
+      expect(r.date).toBe("2026-09-25");
+    });
+
+    it("los martes, sin más", () => {
+      expect(parseDate("Gimnasio los martes", T).recurrence).toEqual({
+        kind: "weekly",
+        every: 1,
+        weekdays: [2],
+      });
+    });
+
+    it("los lunes y miércoles → los dos días", () => {
+      const r = parseDate("estudio los lunes y miércoles", T);
+      expect(r.recurrence).toEqual({ kind: "weekly", every: 1, weekdays: [1, 3] });
+      // El martes 22: el MIÉRCOLES 23 es antes que el lunes 28. Coje el
+      // primero que llega, no el primero de la lista.
+      expect(r.date).toBe("2026-09-23");
+    });
+
+    it("no repite un día dos veces", () => {
+      expect(parseDate("los lunes y los lunes", T).recurrence).toEqual({
+        kind: "weekly",
+        every: 1,
+        weekdays: [1],
+      });
+    });
+  });
+
+  // --- El artículo decide: "el viernes" es UNA fecha, "los viernes" una rutina.
+  describe("el artículo no es decorativo", () => {
+    it("el viernes sigue siendo fecha puntual, sin recurrencia", () => {
+      const r = parseDate("reunión el viernes", T);
+      expect(r.recurrence).toBeUndefined();
+      expect(r.date).toBe("2026-09-25");
+    });
+
+    it("los viernes es rutina, y aun así trae fecha", () => {
+      const r = parseDate("reunión los viernes", T);
+      expect(r.recurrence).toEqual({ kind: "weekly", every: 1, weekdays: [5] });
+      expect(r.date).toBe("2026-09-25");
+    });
+
+    it("no se come los plurales que no son días", () => {
+      expect(parseDate("los dos días", T).recurrence).toBeUndefined();
+      expect(parseDate("los próximos días", T).recurrence).toBeUndefined();
+    });
+  });
 });
