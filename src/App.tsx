@@ -116,6 +116,16 @@ function AppInner() {
     }
   }, [session, pushToast]);
 
+  // La sincronización se publica en el store para que quien la muestra pueda
+  // pedirla a mano («Reintentar ahora»). Antes solo había disparadores
+  // automáticos, así que si algo se quedaba sin subir no había forma de pedir
+  // que lo intentara otra vez sin cerrar y abrir la app.
+  const registerSync = useStore((s) => s.registerSync);
+  useEffect(() => {
+    registerSync(() => void syncNow());
+    return () => registerSync(null);
+  }, [registerSync, syncNow]);
+
   useEffect(() => {
     const userId = session?.user?.id;
     if (userId && pulledFor.current === userId) return;

@@ -54,6 +54,9 @@ interface StoreState {
   setSyncStatus: (status: SyncStatus, error?: string | null) => void;
   /** Cuántas filas están solo en este dispositivo, y por qué no han salido. */
   setPendingUpload: (count: number, error?: string | null) => void;
+  /** Función de sincronización que App registra: permite pedirla a mano. */
+  syncNow: (() => void) | null;
+  registerSync: (fn: (() => void) | null) => void;
 }
 
 let toastSeq = 0;
@@ -97,6 +100,8 @@ export const useStore = create<StoreState>((set) => ({
       lastSyncAt: syncStatus === "synced" ? Date.now() : s.lastSyncAt,
     })),
   setPendingUpload: (pendingUpload, error = null) => set({ pendingUpload, pendingError: error }),
+  syncNow: null,
+  registerSync: (fn) => set({ syncNow: fn }),
   loadSession: async () => {
     try {
       const { data } = await supabase.auth.getSession();
