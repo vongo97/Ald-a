@@ -44,10 +44,13 @@ export default function SyncIndicator() {
   // que tu trabajo esté a salvo. Un indicador que dice «Sin conexión» mientras
   // tres tareas no han salido del móvil tranquiliza a quien no sabe mirar, y
   // quien lo lee se queda con la duda de si se guardó.
-  if (pendingUpload > 0) {
+  // también se avisa cuando no hay cifra pero sí motivo: si la nube no se pudo ni
+  // leer, no se sabe cuántas filas quedan fuera, y callarse justo ahí sería
+  // el silencio que este arreglo viene a quitar.
+  if (pendingUpload > 0 || pendingError) {
     const n = pendingUpload;
-    const motivo = pendingError ? ` — ${pendingError}` : "";
-    const texto = `${n} ${n === 1 ? "tarea sin subir" : "tareas sin subir"}${motivo}`;
+    const corto = n > 0 ? `${n} sin subir` : "Sin comprobar";
+    const texto = pendingError ? `${corto} — ${pendingError}` : `${n} sin subir`;
     return (
       <span
         className="ml-auto flex shrink-0 items-center gap-1.5 pr-1 text-xs text-amber-300 light:text-amber-700"
@@ -56,9 +59,7 @@ export default function SyncIndicator() {
         role="status"
       >
         <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" aria-hidden />
-        <span className="hidden sm:inline">
-          {n} sin subir
-        </span>
+        <span className="hidden sm:inline">{corto}</span>
       </span>
     );
   }
