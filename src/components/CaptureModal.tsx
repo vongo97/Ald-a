@@ -6,9 +6,9 @@ import { useSettings } from "@/store/SettingsContext";
 import { createTaskFromCapture, addSubtasks } from "@/store/actions";
 import { loadProfile } from "@/store/profile";
 import { parseCapture, stripDayCommands, isDayCommandWord, type ParsedCapture } from "@/parsers/capture";
-import { WEEKDAY_SHORT } from "@/parsers/dateparser";
 import { improveCapture, type CaptureSubtask } from "@/llm/tasks";
 import type { Priority } from "@/domain/types";
+import { describeRecurrence } from "@/domain/recurrence";
 import { formatLocalDate, parseISODate } from "@/domain/dateutils";
 import { useDialogA11y } from "@/hooks/useDialogA11y";
 
@@ -198,10 +198,7 @@ export default function CaptureModal() {
             )}
             {parsed.recurrence && (
               <span className={`${chip} bg-violet-500/20 light:bg-violet-100 text-violet-300 light:text-violet-600`}>
-                🔁{" "}
-                {parsed.recurrence.kind === "weekly" && parsed.recurrence.weekdays?.length
-                  ? `cada ${parsed.recurrence.weekdays.map((d) => WEEKDAY_SHORT[d]).join(", ")}`
-                  : "recurre"}
+                🔁 {describeRecurrence(parsed.recurrence)}
               </span>
             )}
             {parsed.projectName && (

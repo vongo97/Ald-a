@@ -45,6 +45,53 @@ function nextDay(d: Date): Date {
   return addDays(d, 1);
 }
 
+const DIA_LARGO = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+const ORDINAL_MES: Record<number, string> = {
+  1: "primer", 2: "segundo", 3: "tercer", 4: "cuarto",
+  [-1]: "último", [-2]: "penúltimo",
+};
+
+/**
+ * Cómo se dice una recurrencia en español, para enseñarla.
+ *
+ * Existe porque un `🔁` a secas es un dato que no se puede respetar: si no
+ * sabes que la tarea se repite los domingos, no hay forma de que se te ocurra
+ * cambiarlo. Y si dos pantallas lo cuentan de dos maneras, un día una mente.
+ */
+export function describeRecurrence(spec: RecurrenceSpec): string {
+  const n = spec.every;
+  switch (spec.kind) {
+    case "daily":
+      return n === 1 ? "cada día" : `cada ${n} días`;
+    case "weekly": {
+      // Sin `uniq`: un `weekdays` con 1,1 se lee «cada lunes, lunes». El
+      // parser ya deduplica, pero esto muestra lo que hay en la base, y ahí
+      // un import puede haber dejado cualquier cosa.
+      const dias = [...new Set(spec.weekdays ?? [])]
+        .sort((a, b) => a - b)
+        .map((d) => DIA_LARGO[d] ?? "?");
+      if (dias.length === 0) return n === 1 ? "cada semana" : `cada ${n} semanas`;
+      if (n === 1) return `cada ${dias.join(", ")}`;
+      return `cada ${n} semanas, los ${dias.join(", ")}`;
+    }
+    case "monthly": {
+      if (spec.nthWeekday) {
+        const ord = ORDINAL_MES[spec.nthWeekday.nth] ?? `día ${spec.nthWeekday.nth}`;
+        const dia = DIA_LARGO[spec.nthWeekday.weekday] ?? "?";
+        return n === 1 ? `el ${ord} ${dia} de cada mes` : `el ${ord} ${dia}, cada ${n} meses`;
+      }
+      if (spec.dayOfMonth) {
+        if (n === 1) return `el día ${spec.dayOfMonth} de cada mes`;
+        return `el día ${spec.dayOfMonth}, cada ${n} meses`;
+      }
+      return n === 1 ? "cada mes" : `cada ${n} meses`;
+    }
+    case "yearly":
+      return n === 1 ? "cada año" : `cada ${n} años`;
+  }
+}
+
 /** ¿El candidato cae en el mismo ciclo semanal que `from`, respetando every? */
 function matchesWeekCycle(spec: Extract<RecurrenceSpec, { kind: "weekly" }>, from: Date, candidate: Date): boolean {
   if (spec.every === 1) return true;

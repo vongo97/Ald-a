@@ -5,6 +5,7 @@ import { db } from "@/store/db";
 import { toggleTask, deleteTask, restoreTask, addSubtask, updateTask } from "@/store/actions";
 import { toggleWithUndo } from "@/store/useStore";
 import { priorityScore } from "@/domain/priority";
+import { describeRecurrence } from "@/domain/recurrence";
 import { formatLocalDate, parseISODate, toISODate, startOfDay } from "@/domain/dateutils";
 import type { Task } from "@/domain/types";
 import BreakdownButton from "./BreakdownButton";
@@ -90,7 +91,18 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                 {task.dueTime ? ` · ${task.dueTime}` : ""}
               </span>
             )}
-            {task.recurrence && <span className="chip bg-violet-500/20 light:bg-violet-100 text-violet-300 light:text-violet-600">🔁</span>}
+            {task.recurrence && (
+              <span
+                className="chip bg-violet-500/20 light:bg-violet-100 text-violet-300 light:text-violet-600"
+                /* El icono solo era un «esto se repite» sin decir CUÁNDO, así
+                   que renombrar la tarea a «los viernes» dejaba el calendario
+                   diciendo otra cosa sin que nadie se enterara. El día es lo
+                   que hay que poder ver para poder cambiarlo. */
+                title={`Se repite: ${describeRecurrence(task.recurrence)}`}
+              >
+                🔁 {describeRecurrence(task.recurrence)}
+              </span>
+            )}
             {project && (
               <span className="chip" style={{ backgroundColor: `${project.color}33`, color: project.color }}>
                 📁 {project.name}
