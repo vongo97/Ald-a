@@ -27,6 +27,8 @@ export default function SyncIndicator() {
   const syncStatus = useStore((s) => s.syncStatus);
   const lastSyncAt = useStore((s) => s.lastSyncAt);
   const syncError = useStore((s) => s.syncError);
+  const pendingUpload = useStore((s) => s.pendingUpload);
+  const pendingError = useStore((s) => s.pendingError);
   const [, forceTick] = useState(0);
 
   // Refresca el "hace X min" cada 30 s sin re-renderizar la app entera.
@@ -36,6 +38,30 @@ export default function SyncIndicator() {
   }, []);
 
   if (!session) return null;
+
+  // Hay trabajo que la nube no tiene. Esto TIENE que ganar al «Sin conexión»
+  // en gris: ese punto dice «no hay red ahora», y es verdad; lo que no dice es
+  // que tu trabajo esté a salvo. Un indicador que dice «Sin conexión» mientras
+  // tres tareas no han salido del móvil tranquiliza a quien no sabe mirar, y
+  // quien lo lee se queda con la duda de si se guardó.
+  if (pendingUpload > 0) {
+    const n = pendingUpload;
+    const motivo = pendingError ? ` — ${pendingError}` : "";
+    const texto = `${n} ${n === 1 ? "tarea sin subir" : "tareas sin subir"}${motivo}`;
+    return (
+      <span
+        className="ml-auto flex shrink-0 items-center gap-1.5 pr-1 text-xs text-amber-300 light:text-amber-700"
+        title={texto}
+        aria-label={texto}
+        role="status"
+      >
+        <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" aria-hidden />
+        <span className="hidden sm:inline">
+          {n} sin subir
+        </span>
+      </span>
+    );
+  }
 
   const dot = DOT[syncStatus] ?? DOT.idle;
   const tooltip =

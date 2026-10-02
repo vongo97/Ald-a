@@ -92,8 +92,13 @@ vi.mock("../supabase", () => ({
   },
 }));
 
-const { setSyncStatus } = vi.hoisted(() => ({ setSyncStatus: vi.fn() }));
-vi.mock("../useStore", () => ({ useStore: { getState: () => ({ setSyncStatus }) } }));
+const { setSyncStatus, setPendingUpload } = vi.hoisted(() => ({
+  setSyncStatus: vi.fn(),
+  setPendingUpload: vi.fn(),
+}));
+vi.mock("../useStore", () => ({
+  useStore: { getState: () => ({ setSyncStatus, setPendingUpload, pendingUpload: 0 }) },
+}));
 
 import { db } from "../db";
 import { needsPush, pullAndSyncFromSupabase } from "../sync";
@@ -113,6 +118,7 @@ beforeEach(() => {
   });
   traza = { tablas: [], upserts: [], deletes: [], error: { message: "TypeError: Failed to fetch" } };
   setSyncStatus.mockClear();
+  setPendingUpload.mockClear();
   errores.length = 0;
   consola.error = (...a: unknown[]) => void errores.push(a.map(String).join(" ").slice(0, 200));
   consola.warn = () => {};

@@ -34,6 +34,10 @@ interface StoreState {
   lastSyncAt: number | null;
   /** Mensaje de error de la última sync fallida. */
   syncError: string | null;
+  /** Filas locales que la nube todavía NO tiene (owhose no se han podido subir). */
+  pendingUpload: number;
+  /** Por qué no se han subido: el mensaje que devuelve Supabase, no un código. */
+  pendingError: string | null;
 
   setView: (v: ViewId) => void;
   setSearchQuery: (q: string) => void;
@@ -48,6 +52,8 @@ interface StoreState {
   loadSession: () => Promise<void>;
   /** Actualiza el estado de sync (llamado desde sync.ts). */
   setSyncStatus: (status: SyncStatus, error?: string | null) => void;
+  /** Cuántas filas están solo en este dispositivo, y por qué no han salido. */
+  setPendingUpload: (count: number, error?: string | null) => void;
 }
 
 let toastSeq = 0;
@@ -66,6 +72,8 @@ export const useStore = create<StoreState>((set) => ({
   syncStatus: "idle",
   lastSyncAt: null,
   syncError: null,
+  pendingUpload: 0,
+  pendingError: null,
 
   setView: (view) => set({ view, showDeviation: false }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
@@ -88,6 +96,7 @@ export const useStore = create<StoreState>((set) => ({
       syncError: syncStatus === "error" ? error : null,
       lastSyncAt: syncStatus === "synced" ? Date.now() : s.lastSyncAt,
     })),
+  setPendingUpload: (pendingUpload, error = null) => set({ pendingUpload, pendingError: error }),
   loadSession: async () => {
     try {
       const { data } = await supabase.auth.getSession();

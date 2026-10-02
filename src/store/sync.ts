@@ -126,15 +126,24 @@ export function toRemote(row: Record<string, unknown>): Record<string, unknown> 
   };
 }
 
-/** Sube un lote de tareas (upsert por id). Silencioso si no hay sesión. */
-export async function autoPushTasks(tasks: Task[]): Promise<void> {
-  if (tasks.length === 0) return;
+/**
+ * Sube un lote de tareas (upsert por id). Silencioso si no hay sesión.
+ * Devuelve el mensaje de error de Supabase, o `null` si fue bien.
+ *
+ * Antes esto solo llevaba el error a la consola. Un `upsert` que falla porque
+ * una columna no existe se come EL LOTE ENTERO: la tarea se queda solo en el
+ * móvil y no hay forma de que nadie se entere. El motivo que devuelve Supabase
+ * es lo único que explica por qué, así que se devuelve en vez de enterrarlo.
+ */
+export async function autoPushTasks(tasks: Task[]): Promise<string | null> {
+  if (tasks.length === 0) return null;
   const userId = await sessionUserId();
-  if (!userId) return;
+  if (!userId) return null;
   const { error } = await supabase
     .from("tasks")
     .upsert(tasks.map((t) => ({ ...toRemote(t as unknown as Record<string, unknown>), user_id: userId })));
   if (error) console.error("AutoSync error (tasks bulk):", error);
+  return error?.message ?? null;
 }
 
 /** Sube un lote de proyectos (upsert por id). Silencioso si no hay sesión. */
@@ -183,7 +192,15 @@ async function pushLocalChanges(): Promise<{ tasks: number; projects: number }> 
   // Si la nube no responde no asumimos "todo es local": abortar el push es lo
   // que impide pisar una edición hecha en otro dispositivo.
   if (remoteTasks.error || remoteProjects.error) {
-    console.error("Push cancelado, la nube no respondió:", remoteTasks.error ?? remoteProjects.error);
+    const err = remoteTasks.error ?? remoteProjects.error;
+    console.error("Push cancelado, la nube no respondió:", err);
+    // Cancelar es lo correcto; callarlo no. Pero NO se inventa una cifra: aquí
+    // no se sabe cuántas filas están solo en el móvil —no se pudo leer la nube
+    // para compararlas—, y decir «40 sin subir» cuando 39 están a salvo en la
+    // nube sería la misma mentira al revés. Se deja la última cifra conocida
+    // y se anota el motivo; el próximo ciclo que sí lea la nube la recalcula.
+    const st = useStore.getState();
+    st.setPendingUpload(st.pendingUpload, `No se pudo comprobar la nube: ${err?.message ?? "desconocido"}`);
     return { tasks: 0, projects: 0 };
   }
 
@@ -199,7 +216,13 @@ async function pushLocalChanges(): Promise<{ tasks: number; projects: number }> 
   const tasksToPush = localTasks.filter((t) => needsPush(t, remoteTaskTime.get(t.id) ?? 0, remoteTaskTime.has(t.id)));
   const projectsToPush = localProjects.filter((p) => needsPush(p, remoteProjectTime.get(p.id) ?? 0, remoteProjectTime.has(p.id)));
 
-  await Promise.all([autoPushTasks(tasksToPush), autoPushProjects(projectsToPush)]);
+  const [falloTasks] = await Promise.all([autoPushTasks(tasksToPush), autoPushProjects(projectsToPush)]);
+  // Aquí SÍ se sabe cuántas filas estaban solo en el móvil: se acaba de leer la
+  // nube y se ha comparado con `needsPush`. Si el push fue bien, ya no hay
+  // ninguna. Es el único punto donde esa cifra es verdad y no una suposición.
+  useStore
+    .getState()
+    .setPendingUpload(falloTasks === null ? 0 : tasksToPush.length, falloTasks);
   return { tasks: tasksToPush.length, projects: projectsToPush.length };
 }
 

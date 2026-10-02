@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { Task } from "@/domain/types";
 
 // ─── Estado compartido de los mocks (hoisted para que esté disponible en vi.mock) ───
-const { mockData, mockSession, mockDb } = vi.hoisted(() => {
+const { mockData, mockSession, mockDb, mockFallo } = vi.hoisted(() => {
   // Almacén en memoria que hace de Supabase
   const mockData: Record<string, Record<string, unknown>[]> = {
     tasks: [],
@@ -10,6 +10,14 @@ const { mockData, mockSession, mockDb } = vi.hoisted(() => {
     tombstones: [],
   };
   const mockSession = { userId: "user-1" as string | null };
+  /** Fallos de la nube: `select` y `upsert` se rompen por separado, porque en la
+   *  app son dos fases distintas y anteproblemas distintos: si no se puede LEER
+   *  se aborta antes de subir; si no se puede ESCRIBIR es cuando hay tareas
+   *  pendientes de verdad. Confundirlas era justo lo que el test no pinaba. */
+  const mockFallo = {
+    select: {} as Record<string, string>,
+    upsert: {} as Record<string, string>,
+  };
 
   // Almacén en memoria que hace de Dexie
   const tables = {
@@ -49,7 +57,7 @@ const { mockData, mockSession, mockDb } = vi.hoisted(() => {
     _tables: tables,
   };
 
-  return { mockData, mockSession, mockDb };
+  return { mockData, mockSession, mockDb, mockFallo };
 });
 
 // ─── Mock de Supabase ─────────────────────────────────────────────────────────
@@ -86,13 +94,21 @@ vi.mock("../supabase", () => ({
           return selectResult;
         },
         then: (
-          resolve: (v: { data: Record<string, unknown>[]; error: null }) => unknown,
+          resolve: (v: { data: Record<string, unknown>[]; error: { message: string } | null }) => unknown,
           reject?: (e: unknown) => unknown,
-        ) => Promise.resolve({ data: applyFilters(store()), error: null }).then(resolve, reject),
+        ) =>
+          Promise.resolve(
+            mockFallo.select[table] !== undefined
+              ? { data: [], error: { message: mockFallo.select[table] } }
+              : { data: applyFilters(store()), error: null },
+          ).then(resolve, reject),
       };
       return {
         select: (_cols?: string) => selectResult,
         upsert: (rows: Record<string, unknown> | Record<string, unknown>[]) => {
+          if (mockFallo.upsert[table] !== undefined) {
+            return Promise.resolve({ error: { message: mockFallo.upsert[table] } });
+          }
           const arr = Array.isArray(rows) ? rows : [rows];
           for (const row of arr) {
             const existing = store().find((r) => r.id === row.id);
@@ -126,12 +142,29 @@ vi.mock("../db", () => ({
 }));
 
 // ─── Mock de useStore (zustand) ──────────────────────────────────────────────
-const { mockSetSyncStatus } = vi.hoisted(() => ({
-  mockSetSyncStatus: vi.fn(),
-}));
+const { mockSetSyncStatus, mockSetPendingUpload, mockEstadoSync } = vi.hoisted(() => {
+  // Store con memoria: no basta con un `vi.fn()`, porque el código LEE
+  // `pendingUpload` antes de escribirlo (al no poder leer la nube deja la
+  // última cifra conocida, no una suposición). Un doble que siempre devuelve
+  // `undefined` pasaría el test sin comprobar nada de eso.
+  const estado = { pendingUpload: 0, pendingError: null as string | null };
+  return {
+    mockEstadoSync: estado,
+    mockSetSyncStatus: vi.fn(),
+    mockSetPendingUpload: vi.fn((n: number, e: string | null = null) => {
+      estado.pendingUpload = n;
+      estado.pendingError = e;
+    }),
+  };
+});
 vi.mock("../useStore", () => ({
   useStore: {
-    getState: () => ({ setSyncStatus: mockSetSyncStatus }),
+    getState: () => ({
+      setSyncStatus: mockSetSyncStatus,
+      setPendingUpload: mockSetPendingUpload,
+      pendingUpload: mockEstadoSync.pendingUpload,
+      pendingError: mockEstadoSync.pendingError,
+    }),
   },
 }));
 
@@ -147,7 +180,12 @@ function resetAll() {
   mockDb._tables.projects.clear();
   mockDb._tables.tombstones.clear();
   mockSession.userId = "user-1";
+  for (const k of Object.keys(mockFallo.select)) delete mockFallo.select[k];
+  for (const k of Object.keys(mockFallo.upsert)) delete mockFallo.upsert[k];
+  mockEstadoSync.pendingUpload = 0;
+  mockEstadoSync.pendingError = null;
   mockSetSyncStatus.mockClear();
+  mockSetPendingUpload.mockClear();
 }
 
 beforeEach(resetAll);
@@ -257,6 +295,62 @@ describe("needsPush", () => {
 
   it("lo local sin reloj pero la nube lo desconoce → sí (es nuevo)", () => {
     expect(needsPush({}, 0, false)).toBe(true);
+  });
+});
+
+// ─── Lo que NO ha salido del móvil ────────────────────────────────────────────
+// El fallo que dio origen a esto: una tarea creada sin red se quedaba solo en
+// el teléfono, sin aparecer en la nube ni en el otro dispositivo, y el único
+// rastro era un `console.error`. Nadie —ni la app ni quien la usa— se enteraba.
+// Estos tests fijan que el motivo de Supabase llega a la interfaz.
+describe("queda constancia de lo que no se ha subido", () => {
+  it("el push va bien → no hay nada pendiente", async () => {
+    mockDb._tables.tasks.set("local-1", {
+      id: "local-1", title: "Creada offline", updatedAt: "2026-01-01T00:00:00Z",
+    });
+
+    await pullAndSyncFromSupabase();
+
+    expect(mockSetPendingUpload).toHaveBeenCalledWith(0, null);
+  });
+
+  it("el upsert falla → se cuenta y se lleva el motivo de Supabase", async () => {
+    // El fallo real que reportó el usuario: la columna no existe en la nube y
+    // el lote entero se cae. El mensaje («column "recurrence" does not exist»)
+    // es lo único que explica el fallo, así que tiene que llegar hasta el
+    // indicador, no quedarse en la consola.
+    mockFallo.upsert.tasks = 'column "recurrence" does not exist';
+    mockDb._tables.tasks.set("local-1", {
+      id: "local-1", title: "Creada offline", updatedAt: "2026-01-01T00:00:00Z",
+    });
+    mockDb._tables.tasks.set("local-2", {
+      id: "local-2", title: "Otra offline", updatedAt: "2026-01-02T00:00:00Z",
+    });
+
+    await pullAndSyncFromSupabase();
+
+    expect(mockSetPendingUpload).toHaveBeenCalledWith(2, 'column "recurrence" does not exist');
+    // Y de verdad no llegaron: el punto de todo esto es no fingir.
+    expect(mockData.tasks).toHaveLength(0);
+  });
+
+  it("si la nube no se puede LEER, no se inventa una cifra de pendientes", async () => {
+    // Aquí no se sabe cuántas filas están solo en el móvil: no se pudo leer la
+    // nube para compararlas. Decir «40 sin subir» cuando 39 están a salvo sería
+    // la misma mentira al revés. La última cifra conocida se conserva y solo se
+    // anota el motivo.
+    mockFallo.select.tasks = "Failed to fetch";
+    mockDb._tables.tasks.set("local-1", {
+      id: "local-1", title: "Creada offline", updatedAt: "2026-01-01T00:00:00Z",
+    });
+
+    await pullAndSyncFromSupabase();
+
+    const [cifra, motivo] = mockSetPendingUpload.mock.calls.at(-1)!;
+    expect(cifra).toBe(0); // la última cifra conocida, no una suposición
+    expect(String(motivo)).toContain("Failed to fetch");
+    // Y en ningún caso se afirma que esté todo subido.
+    expect(mockSetPendingUpload).not.toHaveBeenCalledWith(0, null);
   });
 });
 
