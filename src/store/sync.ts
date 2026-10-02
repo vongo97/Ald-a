@@ -223,6 +223,29 @@ export interface SyncSummary {
  * Si la nube falla en cualquier punto, lo local queda intacto.
  * Devuelve un `SyncSummary` con lo que hizo; `null` si no hay sesión.
  */
+/**
+ * ¿Este error es «no hay red» y no «la app ha fallado»?
+ *
+ * Un fallo de red llega como un `TypeError` de `fetch` envuelto, sin código
+ * HTTP: nunca hubo respuesta. Un fallo de verdad (RLS, SQL, tabla que no
+ * existe) llega con su código y su mensaje. La app no tiene por qué poner un
+ * punto rojo de alarma al usuario que está en modo avión con todo su trabajo
+ * a salvo en el dispositivo.
+ *
+ * Exportada para tests: la diferencia entre «rojo de alarma» y «gris tranquilo»
+ * es justo la clase de cosa que no debe depender de cómo se redactó el mensaje.
+ */
+export function esCaidaDeRed(err: unknown): boolean {
+  if (!err) return false;
+  const msg = String((err as { message?: unknown })?.message ?? err).toLowerCase();
+  if (/typeerror|failed to fetch|networkerror|network request failed|econnrefused|err_internet_disconnected|load failed/.test(msg)) {
+    return true;
+  }
+  // `navigator.onLine === false` es una señal débil y a veces falsa, pero cuando
+  // dice que no hay red, es que no hay red.
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
 export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
   const userId = await sessionUserId();
   if (!userId) return null; // Sin cuenta no hay nube: todo sigue siendo local.
@@ -239,7 +262,17 @@ export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
     ]);
     if (pErr || tErr) {
       console.error("Pull abortado (la nube falló, lo local se conserva):", pErr ?? tErr);
-      useStore.getState().setSyncStatus("error", (pErr ?? tErr)?.message ?? "Error desconocido");
+      // Un fallo de RED no es un error de la app: es el caso normal de un
+      // portátil en el tren. Ponerlo en `error` pintaba un punto ROJO, que
+      // significa «algo está mal», cuando no hay nada que arreglar y todo el
+      // trabajo está a salvo en el dispositivo.
+      //
+      // Se mira el error y no solo `navigator.onLine`: esa señal miente mucho
+      // (da `true` si hay wifi aunque no haya internet), y por sí sola dejaría
+      // el estado `offline` sin usarse en la mitad de los casos.
+      const err = pErr ?? tErr;
+      const caida = esCaidaDeRed(err);
+      useStore.getState().setSyncStatus(caida ? "offline" : "error", err?.message ?? "Error desconocido");
       return null;
     }
 

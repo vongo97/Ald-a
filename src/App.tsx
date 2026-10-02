@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useStore } from "@/store/useStore";
 import { applyTheme } from "@/store/theme";
@@ -90,34 +90,62 @@ function AppInner() {
   // La purga de la Papelera (caducidad de 30 días) se ejecuta SIEMPRE después
   // del pull —o al cargar sin cuenta—: si va antes, el pull vuelve a bajar de
   // la nube las filas que acabamos de purgar.
+  //
+  // La sincronización como tal, en un sitio reutilizable: se llama al arrancar
+  // (al conocer la sesión) y también cuando VUELVE la conexión.
+  const syncNow = useCallback(async () => {
+    if (session?.user?.id) {
+      const summary = await pullAndSyncFromSupabase();
+      // Avisos de conflictos: borrados que llegaron desde otro dispositivo.
+      if (summary && summary.remoteDeletes > 0) {
+        const n = summary.remoteDeletes;
+        pushToast(
+          n === 1
+            ? "1 tarea eliminada desde otro dispositivo"
+            : `${n} tareas eliminadas desde otro dispositivo`,
+        );
+      }
+    }
+
+    const purged = await purgeExpiredTrash();
+    const total = purged.tasks + purged.projects;
+    if (total > 0) {
+      pushToast(
+        `🗑️ Papelera: ${total} ${total === 1 ? "elemento" : "elementos"} eliminado${total === 1 ? "" : "s"} tras 30 días`,
+      );
+    }
+  }, [session, pushToast]);
+
   useEffect(() => {
     const userId = session?.user?.id;
     if (userId && pulledFor.current === userId) return;
     if (userId) pulledFor.current = userId;
 
-    void (async () => {
-      if (userId) {
-        const summary = await pullAndSyncFromSupabase();
-        // Avisos de conflictos: borrados que llegaron desde otro dispositivo.
-        if (summary && summary.remoteDeletes > 0) {
-          const n = summary.remoteDeletes;
-          pushToast(
-            n === 1
-              ? "1 tarea eliminada desde otro dispositivo"
-              : `${n} tareas eliminadas desde otro dispositivo`,
-          );
-        }
-      }
+    void syncNow();
+  }, [session, syncNow]);
 
-      const purged = await purgeExpiredTrash();
-      const total = purged.tasks + purged.projects;
-      if (total > 0) {
-        pushToast(
-          `🗑️ Papelera: ${total} ${total === 1 ? "elemento" : "elementos"} eliminado${total === 1 ? "" : "s"} tras 30 días`,
-        );
-      }
-    })();
-  }, [session]);
+  // ── Volver a tener red sincroniza solo, sin recargar la app ────────────────
+  //
+  // Antes solo había un disparo de sincronización: al abrir la app. Quien
+  //worked sin conexión se encontraba con que su trabajo seguía en el móvil
+  //hasta que recargaba, y no tenía forma de saber si ya había subido. Para una
+  //PWA eso es exactamente lo que no debería pasar: si la app puede funcionar
+  //sin red, también debe recuperarse sola cuando la red vuelve.
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    let sincronizando = false;
+
+    const alVolverLaRed = () => {
+      if (sincronizando) return;
+      sincronizando = true;
+      void syncNow().finally(() => {
+        sincronizando = false;
+      });
+    };
+
+    window.addEventListener("online", alVolverLaRed);
+    return () => window.removeEventListener("online", alVolverLaRed);
+  }, [session, syncNow]);
 
   // Desglose automático: las capturas que quedaron como bloque de texto
   // (título gigante) se estructuran solas al arrancar — título corto +
