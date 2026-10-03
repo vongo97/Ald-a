@@ -61,6 +61,33 @@ describe("propuestaDeDia: solo cuando hay algo que proponer", () => {
     expect(p!.weekdays).toEqual([M]);
   });
 
+  it("el dia del mes tambien se propone", () => {
+    // El día 15 del mes es un hueco que antes no tenía puerta de entrada: el
+    // tipo existía y el editor no lo ofrecía nunca.
+    const p = propuestaDeDia("Pagar el alquiler el día 15 de cada mes", undefined);
+    expect(p!.spec).toEqual({ kind: "monthly", every: 1, dayOfMonth: 15 });
+    expect(p!.texto).toBe("el día 15 de cada mes");
+    expect(p!.esNueva).toBe(true);
+  });
+
+  it("cambiar de dia del mes SI es un cambio, y de dia del mes a dia de la semana tambien", () => {
+    const dia15: RecurrenceSpec = { kind: "monthly", every: 1, dayOfMonth: 15 };
+    // Mismo día, mismo mes: no hay nada que decir.
+    expect(propuestaDeDia("Pagar el día 15 de cada mes", dia15)).toBeNull();
+    // Otro día del mes: sí.
+    expect(propuestaDeDia("Pagar el día 20 de cada mes", dia15)!.spec).toEqual({
+      kind: "monthly", every: 1, dayOfMonth: 20,
+    });
+    // Cambiar de calendario: también, porque la tarea deja de repetirse el 15.
+    expect(propuestaDeDia("Revisar los viernes", dia15)!.spec).toEqual({
+      kind: "weekly", every: 1, weekdays: [V],
+    });
+  });
+
+  it("un dia del mes no se confunde con una cantidad", () => {
+    expect(propuestaDeDia("Pagar el alquiler todos los meses 30 euros", undefined)).toBeNull();
+  });
+
   it("una rutina semanal SIN dia fijo tambien es un cambio", () => {
     // «cada semana» no dice qué día, y por eso el texto sí tiene algo que decir.
     const p = propuestaDeDia("Revisión semanal los viernes", { kind: "weekly", every: 1 });

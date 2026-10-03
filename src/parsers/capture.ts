@@ -142,7 +142,12 @@ export function parseCapture(input: string, ctx: CaptureContext = {}): ParsedCap
       // el sujeto y salía "hay reunión de equipo", que ya no se lee como una
       // tarea. Al final sí sobra, y ahí se quita como siempre: "Llamar al
       // proveedor mañana" → "Llamar al proveedor" con la fecha puesta.
-      if (new RegExp(`^\\s*${re.source}`, "i").test(text)) {
+      //
+      // Una RECURRENCIA se quita siempre, incluso abriendo la frase: "cada mes
+      // el día 1 revisar el presupuesto" no pierde nada si se quita, porque lo
+      // que describe es una propiedad de la tarea, nunca de qué trata. Dejarlo
+      // daría títulos que se repiten a sí mismos.
+      if (dp.recurrence === undefined && new RegExp(`^\\s*${re.source}`, "i").test(text)) {
         matched.push(frag);
         continue;
       }

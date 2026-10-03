@@ -5,7 +5,7 @@ import { db } from "@/store/db";
 import { toggleTask, deleteTask, restoreTask, addSubtask, updateTask } from "@/store/actions";
 import { toggleWithUndo } from "@/store/useStore";
 import { priorityScore } from "@/domain/priority";
-import { describeRecurrence, nombresDias } from "@/domain/recurrence";
+import { describeRecurrence } from "@/domain/recurrence";
 import { propuestaDeDia } from "@/parsers/propuestaDia";
 import { formatLocalDate, parseISODate, toISODate, startOfDay } from "@/domain/dateutils";
 import type { RecurrenceSpec, Task } from "@/domain/types";
@@ -170,7 +170,12 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                           onClick={() => setEditRecurrence(propuesta.spec)}
                           className="chip shrink-0 bg-violet-500/30 light:bg-violet-200 light:text-violet-900 hover:opacity-80"
                         >
-                          {propuesta.esNueva ? "Hacerla recurrente" : `Cambiar a ${nombresDias(propuesta.weekdays)}`}
+                          {/* Con `weekdays` vacíos (un día del mes) el texto del botón
+                              era «Cambiar a » a secas. Se usa lo que dice el propio
+                              título, que es lo que se va a guardar. */}
+                          {propuesta.esNueva
+                            ? "Hacerla recurrente"
+                            : `Cambiar a ${propuesta.texto}`}
                         </button>
                       </div>
                     )}

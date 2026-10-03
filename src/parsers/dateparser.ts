@@ -66,12 +66,27 @@ export function parseDate(input: string, today: Date = new Date()): DateParse {
   };
 
   // ---- Recurrencia -------------------------------------------------------
+  // Primero el día concreto del mes: "el día 15 de cada mes". Tiene que ir antes
+  // que la regla genérica de "cada N meses" o esa se le come el periodo y el
+  // "el día 15" se queda en el título.
+  const diaDelMes = detectaDiaDelMes(text, today);
+  if (diaDelMes) {
+    recurrence = diaDelMes.recurrence;
+    date = diaDelMes.date;
+    matched.push(diaDelMes.matched);
+  }
+
   let m = text.match(/\bcada (\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(d[ií]as?|semanas?|mes(?:es)?|a(?:ñ|n)os?)\b/);
-  if (m) {
+  if (m && recurrence === undefined) {
     const n = Math.max(1, wordToNumber(m[1]) ?? 1);
     const unit = m[2].startsWith("sem") ? "weekly" : m[2].startsWith("mes") ? "monthly" : m[2].startsWith("d") ? "daily" : "yearly";
     recurrence = { kind: unit, every: n } as RecurrenceSpec;
     consume(m);
+  } else if (recurrence !== undefined) {
+    // Ya está resuelta por `detectaDiaDelMes` y su texto se ha consumido entero.
+    // La regla genérica de "cada N meses" también encaja con "cada 3 meses el
+    // día 15", y si esta gana después dejaría la recurrencia en "cada 3 meses" sin
+    // día: el 15 se pierde y no hay nada en pantalla que lo diga.
   } else if ((m = text.match(/\bcada semana\b/))) {
     recurrence = { kind: "weekly", every: 1 };
     consume(m);
@@ -290,4 +305,80 @@ function inferYear(today: Date, month: number, day: number): number {
   return thisYear.getTime() >= parseISODate(toISODate(today)).getTime() - 86400_000
     ? today.getFullYear()
     : today.getFullYear() + 1;
+}
+
+/** "cada 3 meses", "cada mes", "todos los meses" — con el número en su grupo. */
+const PERIODO_MES =
+  "cada\\s+(\\d+|un|una|dos|tres|cuatro|cinco|siete|ocho|nueve|diez|quince|veinte)\\s+mes(?:es)?" +
+  "|cada\\s+mes(?:es)?" +
+  "|todos\\s+los\\s+mes(?:es)?";
+
+/** Próximo día N del mes, contando desde hoy y saltando los meses que toquen. */
+function proximaDeDiaDelMes(today: Date, dia: number, cada: number): Date {
+  for (let salto = 0; salto < 24; salto += cada) {
+    const mes = today.getMonth() + salto;
+    const anio = today.getFullYear() + Math.floor(mes / 12);
+    const mesNorm = ((mes % 12) + 12) % 12;
+    // Un mes sin día 31 es el 30 (o 28/29): no se pierde la tarea, se acorta.
+    const ultimo = new Date(anio, mesNorm + 1, 0).getDate();
+    const d = new Date(anio, mesNorm, Math.min(dia, ultimo), 12);
+    if (toISODate(d) > toISODate(today)) return d;
+  }
+  return addMonths(today, cada);
+}
+
+/**
+ * Un día concreto del mes: "el día 15 de cada mes", "el 15 de cada mes",
+ * "cada mes el día 15", "todos los meses el día 15", "cada 3 meses el día 15".
+ *
+ * Va antes que las reglas genéricas de mes porque "cada 3 meses" también encaja
+ * en la de `cada N`, y si esa gana primero el "el día 15" se queda colgando en
+ * el título —el mismo tipo de fallo que se acaba de arreglar en los días.
+ *
+ * El tipo, el cálculo de la siguiente fecha y el texto que lo enseña ya sabían
+ * hacerlo (`nextOccurrence` y `describeRecurrence`); lo que no existía era la
+ * puerta de entrada. Sin ella, "el día 15 de cada mes" se guardaba como "cada
+ * mes", que no es lo mismo: el día 1 no es el día 15, y el fallo era en silencio.
+ *
+ * Cuando el día va detrás ("cada mes el día 15") se exige la palabra "día". Sin
+ * ella, "pagar el alquiler todos los meses 30 euros" se leería como el día 30.
+ */
+export function detectaDiaDelMes(
+  text: string,
+  today: Date,
+): { recurrence: Extract<RecurrenceSpec, { kind: "monthly" }>; date: Date; matched: string } | null {
+  // Día delante: "el día 15 de cada mes" → grupo 1 = día, grupo 2 = cada cuántos.
+  const antesDelDia = new RegExp(`\\b(?:el\\s+)?(?:d[ií]a\\s+)?(\\d{1,2})\\s+de\\s+(?:${PERIODO_MES})\\b`);
+  // Día detrás: "cada mes el día 15" → grupo 2 = día, grupo 3 = cada cuántos.
+  // Exige la palabra "día" porque si no, "todos los meses 30 euros" se leería
+  // como el día 30 de cada mes.
+  const despuesDelDia = new RegExp(`\\b(?:${PERIODO_MES})[\\s,]+(?:el\\s+)?d[ií]a\\s+(\\d{1,2})\\b`);
+
+  // El número del periodo se lee de SU grupo y no del trozo entero: buscando el
+  // primer número de "el día 15 de cada mes" salía "cada 15 meses", que es un
+  // fallo silencioso y del todo creíble.
+  const antes = antesDelDia.exec(text);
+  if (antes) {
+    const dia = Number(antes[1]);
+    const cada = wordToNumber(antes[3] ?? "") ?? 1;
+    if (dia >= 1 && dia <= 31) {
+      return {
+        recurrence: { kind: "monthly", every: Math.max(1, cada), dayOfMonth: dia },
+        date: proximaDeDiaDelMes(today, dia, Math.max(1, cada)),
+        matched: antes[0],
+      };
+    }
+    return null;
+  }
+
+  const despues = despuesDelDia.exec(text);
+  if (!despues) return null;
+  const dia = Number(despues[2]);
+  const cada = wordToNumber(despues[1] ?? "") ?? 1;
+  if (!Number.isInteger(dia) || dia < 1 || dia > 31) return null;
+  return {
+    recurrence: { kind: "monthly", every: Math.max(1, cada), dayOfMonth: dia },
+    date: proximaDeDiaDelMes(today, dia, Math.max(1, cada)),
+    matched: despues[0],
+  };
 }
