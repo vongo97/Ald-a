@@ -38,6 +38,28 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
   const recurrenceCambiada =
     JSON.stringify(editRecurrence) !== JSON.stringify(task.recurrence);
 
+  /**
+   * Guardar y cerrar, en un sitio solo.
+   *
+   * Estaba en el `onClick` del botón y se ha movido aquí porque ahora también lo
+   * llama el teclado. Dos copias de la misma escritura —con la lista de campos
+   * dentro— son dos sitios donde se puede olvidar uno: el botón guardaría cinco
+   * campos y Enter solo el título, sin que nadie lo viera hasta que una tarea
+   * perdiera la fecha.
+   */
+  const guardar = async () => {
+    await updateTask(task.id, {
+      title: editTitle.trim() || task.title,
+      notes: editNotes.trim() || undefined,
+      dueDate: editDate || undefined,
+      dueTime: editTime || undefined,
+      durationMin: editDuration,
+      recurrence: editRecurrence,
+    });
+    setEditing(false);
+    pushToast("Tarea actualizada");
+  };
+
   const subtasks = useLiveQuery(
     () =>
       db.tasks
@@ -148,13 +170,42 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                 </div>
               )}
               {editing ? (
-                <div className="mb-3 space-y-2 rounded-lg bg-surface p-3 text-xs">
+                <div
+                  className="mb-3 space-y-2 rounded-lg bg-surface p-3 text-xs"
+                  onKeyDown={(e) => {
+                    // Escape cierra y descarta, como en CaptureModal,
+                    // BreakdownModal, OverdueRescheduleModal, SyncIndicator y
+                    // ProfileQuestionnaire. Son cinco contra uno: este panel era
+                    // el único sitio de la app donde la tecla no hacía nada.
+                    //
+                    // Va en el contenedor y no en cada campo para que salga igual
+                    // desde el título, las notas, la fecha, la hora o la duración,
+                    // que es lo que hace un diálogo. Aquí es lo contrario: es
+                    // edición EN DIRECTO, no una puerta que cruzar, y por eso
+                    // guardar es Enter y cerrar es Escape —las dos cosas que ya
+                    // se esperaban, una en cada tecla.
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      setEditing(false);
+                    }
+                  }}
+                >
                   <div>
                     <label className="mb-0.5 block text-muted">Título</label>
                     <input
                       type="text"
                       value={editTitle}
                       onChange={(e) => setEditTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        // Solo aquí, y no en el panel entero: las notas son un
+                        // `textarea`, y ahí Enter tiene que seguir siendo un
+                        // salto de línea. Ponerlo en el contenedor habría hecho
+                        // que no se pudiera escribir una nota de dos líneas.
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void guardar();
+                        }
+                      }}
                       className="input py-1 text-xs"
                     />
                     {propuesta && (
@@ -239,18 +290,7 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                     </button>
                     <button
                       type="button"
-                      onClick={async () => {
-                        await updateTask(task.id, {
-                          title: editTitle.trim() || task.title,
-                          notes: editNotes.trim() || undefined,
-                          dueDate: editDate || undefined,
-                          dueTime: editTime || undefined,
-                          durationMin: editDuration,
-                          recurrence: editRecurrence,
-                        });
-                        setEditing(false);
-                        pushToast("Tarea actualizada");
-                      }}
+                      onClick={() => void guardar()}
                       className="btn-primary py-1 text-xs"
                     >
                       Guardar
