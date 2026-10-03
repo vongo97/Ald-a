@@ -191,8 +191,9 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                   }}
                 >
                   <div>
-                    <label className="mb-0.5 block text-muted">Título</label>
+                    <label htmlFor="edit-titulo" className="mb-0.5 block text-muted">Título</label>
                     <input
+                      id="edit-titulo"
                       type="text"
                       value={editTitle}
                       onChange={(e) => setEditTitle(e.target.value)}
@@ -237,8 +238,9 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                     )}
                   </div>
                   <div>
-                    <label className="mb-0.5 block text-muted">Notas</label>
+                    <label htmlFor="edit-notas" className="mb-0.5 block text-muted">Notas</label>
                     <textarea
+                      id="edit-notas"
                       value={editNotes}
                       onChange={(e) => setEditNotes(e.target.value)}
                       rows={2}
@@ -250,8 +252,9 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                       el input de fecha se cortaba mostrando solo "26/09/". */}
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     <div>
-                      <label className="mb-0.5 block text-muted">Fecha</label>
+                      <label htmlFor="edit-fecha" className="mb-0.5 block text-muted">Fecha</label>
                       <input
+                        id="edit-fecha"
                         type="date"
                         value={editDate}
                         onChange={(e) => setEditDate(e.target.value)}
@@ -259,8 +262,9 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                       />
                     </div>
                     <div>
-                      <label className="mb-0.5 block text-muted">Hora</label>
+                      <label htmlFor="edit-hora" className="mb-0.5 block text-muted">Hora</label>
                       <input
+                        id="edit-hora"
                         type="time"
                         value={editTime}
                         onChange={(e) => setEditTime(e.target.value)}
@@ -268,8 +272,9 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                       />
                     </div>
                     <div>
-                      <label className="mb-0.5 block text-muted">Duración (m)</label>
+                      <label htmlFor="edit-duracion" className="mb-0.5 block text-muted">Duración (m)</label>
                       <input
+                        id="edit-duracion"
                         type="number"
                         min="5"
                         step="5"
