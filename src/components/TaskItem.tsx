@@ -361,21 +361,40 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
                   placeholder="Añadir subtarea + Enter"
                   className="input w-full py-1 text-xs sm:w-auto sm:flex-1"
                 />
-                <button
-                  type="button"
-                  className="btn-ghost py-1 text-xs"
-                  onClick={() => {
-                    setEditTitle(task.title);
-                    setEditNotes(task.notes ?? "");
-                    setEditDate(task.dueDate ?? "");
-                    setEditTime(task.dueTime ?? "");
-                    setEditDuration(task.durationMin);
-                    setEditRecurrence(task.recurrence);
-                    setEditing((v) => !v);
-                  }}
-                >
-                  {editing ? "Cerrar edición" : "✏️ Editar"}
-                </button>
+                {/* Mientras el panel está abierto, este botón no existe.
+                    *
+                    * Antes era un interruptor: decía «Cerrar edición» y cerraba
+                    * tirando lo escrito, sin preguntar. Con el panel abierto encima
+                    * y su «Cancelar» a treinta píxeles, era la única forma de
+                    * perder trabajo de un toque sin haber mirado los dos botones
+                    * que lo hacen a propósito. En el móvil, que es donde se
+                    * edita de verdad, es un tap en la fila equivocada.
+                    *
+                    * No se sustituye por una ventana de «¿descartar?». Un
+                    * diálogo en el botón de cerrar enseña a descartar sin leer, y
+                    * ese hábito es lo que vuelve peligroso un diálogo el día que
+                    * sí importa, como borrar una tarea de verdad.
+                    *
+                    * De paso, en móvil quedan tres hijos en la fila de botones en
+                    * vez de cuatro, que es lo que ya decía el comentario
+                    * de arriba del div. */}
+                {!editing && (
+                  <button
+                    type="button"
+                    className="btn-ghost py-1 text-xs"
+                    onClick={() => {
+                      setEditTitle(task.title);
+                      setEditNotes(task.notes ?? "");
+                      setEditDate(task.dueDate ?? "");
+                      setEditTime(task.dueTime ?? "");
+                      setEditDuration(task.durationMin);
+                      setEditRecurrence(task.recurrence);
+                      setEditing(true);
+                    }}
+                  >
+                    ✏️ Editar
+                  </button>
+                )}
                 <BreakdownButton task={task} />
                 <button
                   type="button"
