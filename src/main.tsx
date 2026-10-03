@@ -6,15 +6,26 @@ import "./index.css";
 // fichero de animaciones (las reglas por tema mandan sobre las base).
 import "./styles/ald-a-animations.css";
 import { settingsRepo } from "./store/settings";
-import { seedIfEmpty } from "./store/db";
+import { seedIfEmpty, reparaIdsLocales } from "./store/db";
 
 async function bootstrap() {
+  // ANTES de sembrar y ANTES de la primera sincronización. Si fuera después, la
+  // primera subida volvería a fallar con las filas viejas y el arreglo parecería
+  // que no hace nada.
+  const reparados = await reparaIdsLocales();
   await seedIfEmpty();
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
       <App />
     </StrictMode>,
   );
+  if (reparados > 0) {
+    // Aviso, no silencio. Cambiar identificadores es de las pocas cosas de las
+    // que aquí se puede hacer sin que nadie lo note, y justamente por eso hay que
+    // contarlo: si alguien tiene un respaldo en JSON de antes, sus ids ya no
+    // coinciden con los del móvil, y que lo sepa es mejor que averiguarlo luego.
+    console.info(`[arranque] Reparados ${reparados} ids antiguos.`);
+  }
 }
 
 void bootstrap();

@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from "dexie";
 import type { Project, Task } from "@/domain/types";
 import { toISODate } from "@/domain/dateutils";
+import { reparaIds } from "./reparaIds";
 
 export interface Tombstone {
   id: string;
@@ -141,6 +142,48 @@ const uid = (): string =>
   typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : uuidV4();
 
 export const newId = uid;
+
+/**
+ * Repara los ids que la app se inventó antes y que la nube no puede aceptar.
+ *
+ * Devuelve cuántas filas tenía el id con forma `t-…` que `uid()` producía fuera
+ * de un contexto seguro, para poder avisar. Cero es lo normal desde el arreglo de
+ * `uid`; un número mayor que cero significa que este dispositivo arrastra trabajo
+ * hecho antes, y que sin esto seguiría en «pendiente» para siempre.
+ *
+ * Se ejecuta antes que `seedIfEmpty` y antes de cualquier sincronización: si no,
+ * la primera subida volvería a fallar con las filas viejas y el arreglo parecería
+ * que no funciona.
+ */
+export async function reparaIdsLocales(): Promise<number> {
+  const [tareas, proyectos] = await Promise.all([db.tasks.toArray(), db.projects.toArray()]);
+  const { tareas: t2, proyectos: p2, cambiados, idsViejos } = reparaIds(tareas, proyectos);
+  if (cambiados === 0) return 0;
+
+  // En una transacción, y BORRANDO antes de escribir.
+  //
+  // El borrado no es opcional: la clave primaria está sobre `id`, así que un
+  // `bulkPut` con un id distinto no actualiza la fila, AÑADE otra. Sin borrar,
+  // cada tarea rota se duplicaba en la lista, la vieja seguía con su id `t-…` y
+  // la reparación volvería a encontrarla en el siguiente arranque, para siempre.
+  //
+  // Los tests contra el Dexie de verdad lo pillaron: el primero decía
+  // `expected 3 to be 2`, y el que comprobaba la idempotencia decía que la
+  // segunda pasada encontraba 2 ids otra vez. Los tests de la función pura pasaban
+  // los trece y aun así esto rompía.
+  await db.transaction("rw", db.tasks, db.projects, async () => {
+    await db.projects.bulkDelete(idsViejos);
+    await db.tasks.bulkDelete(idsViejos);
+    await db.projects.bulkPut(p2);
+    await db.tasks.bulkPut(t2);
+  });
+
+  console.info(
+    `[sync] Reparados ${cambiados} ids con formato antiguo (t-…). Esas filas no ` +
+      `podían subir nunca; ahora ya pueden.`,
+  );
+  return cambiados;
+}
 
 export async function seedIfEmpty(): Promise<void> {
   const count = await db.tasks.count();
