@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { Task } from "@/domain/types";
 
 // ─── Estado compartido de los mocks (hoisted para que esté disponible en vi.mock) ───
@@ -26,6 +26,13 @@ const { mockData, mockSession, mockDb, mockFallo } = vi.hoisted(() => {
      * así: que la petición de varias filas se caiga y las de una sola pasen.
      */
     upsertFila: null as null | ((row: Record<string, unknown>, lote: number) => string | null),
+    /**
+     * Registro de los filtros de tiempo que se han pedido a la nube. Hace falta
+     * poder afirmar que la SEGUNDA sincronización filtra y la primera no: si no
+     * se registraran, el test solo vería que las dos devuelven lo mismo, que es
+     * justo lo que pasa cuando el filtro no se está aplicando.
+     */
+    filtros: [] as { tabla: string; col: string; val: string }[],
   };
 
   // Almacén en memoria que hace de Dexie
@@ -100,6 +107,14 @@ vi.mock("../supabase", () => ({
       const selectResult = {
         eq: (col: string, val: unknown) => {
           filters.push((r) => r[col] === val);
+          return selectResult;
+        },
+        // `gt` es lo que usa el pull con marca de agua. Sin esto en el doble, el
+        // filtro se perdería por el camino y los tests de la marca pasarían sin
+        // comprobar nada: el punto es que NO se bajen filas viejas.
+        gt: (col: string, val: string) => {
+          mockFallo.filtros.push({ tabla: table, col, val });
+          filters.push((r) => Date.parse(String(r[col] ?? 0)) > Date.parse(val));
           return selectResult;
         },
         then: (
@@ -200,6 +215,7 @@ function resetAll() {
   for (const k of Object.keys(mockFallo.select)) delete mockFallo.select[k];
   for (const k of Object.keys(mockFallo.upsert)) delete mockFallo.upsert[k];
   mockFallo.upsertFila = null;
+  mockFallo.filtros.length = 0;
   mockEstadoSync.pendingUpload = 0;
   mockEstadoSync.pendingError = null;
   mockSetSyncStatus.mockClear();
@@ -635,6 +651,141 @@ describe("pullAndSyncFromSupabase", () => {
     expect(result!.pulledProjects).toBe(1);
     expect(mockData.projects).toHaveLength(2);
     expect(mockDb._tables.projects.size).toBe(2);
+  });
+});
+
+// ─── La bajada solo pide lo que ha cambiado ───────────────────────────────────
+//
+// El pull era `select("*")` sin filtro. Al subir la frecuencia a 30 segundos eso
+// pasó a ser «la tabla entera cada medio minuto»: gratis con 14 tareas, cuota del
+// proyecto con unas cientos. Estos tests comprueban las dos mitas de la marca:
+// que se filtra, y —lo que de verdad duele— que NO se filtra cuando no se debe.
+describe("la bajada solo pide lo que ha cambiado", () => {
+  /** localStorage de mentira: en `node` no existe y `leerMarca` lo captura. */
+  function instalarLocalStorage() {
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+    });
+    return store;
+  }
+
+  let store: Map<string, string>;
+
+  beforeEach(() => {
+    store = instalarLocalStorage();
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date("2026-10-02T12:00:00Z") });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("la PRIMERA sincronizacion no filtra: se baja todo", async () => {
+    // Si la primera bajada se filtrara, el dispositivo arrancaría sin nada y con
+    // la nube «al día». Eso no da ningún error: se ve como si no hubiera tareas.
+    await pullAndSyncFromSupabase();
+    expect(mockFallo.filtros).toEqual([]);
+  });
+
+  it("la SEGUNDA si filtra, y por las tres tablas", async () => {
+    await pullAndSyncFromSupabase();
+    mockFallo.filtros.length = 0;
+
+    await pullAndSyncFromSupabase();
+
+    // Las tres: dejar las tumbas fuera haría que un borrado hecho en otro
+    // dispositivo no se aplicara nunca, y la tarea volvería a salir aquí.
+    expect(mockFallo.filtros.map((f) => f.tabla).sort()).toEqual(["projects", "tasks", "tombstones"]);
+    for (const f of mockFallo.filtros) expect(f.col).toBe("updated_at");
+  });
+
+  it("el filtro lleva un minuto de margen sobre la marca, no la marca justa", async () => {
+    await pullAndSyncFromSupabase();
+    mockFallo.filtros.length = 0;
+
+    await pullAndSyncFromSupabase();
+
+    const pedido = mockFallo.filtros.find((f) => f.tabla === "tasks")!.val;
+    // La marca quedó en las 12:00 (el reloj parado). Se pide desde las 11:59.
+    expect(pedido).toBe("2026-10-02T11:59:00.000Z");
+  });
+
+  it("una fila vieja que aparece en la nube NO se baja", async () => {
+    await pullAndSyncFromSupabase(); // marca ≈ 12:00
+    // Una fila con una fecha vieja: o la app se la bajó antes y volvió a
+    // aparecer por un borrado mal hecho, o alguien la escribió con reloj
+    // atrasado. Con el filtro no molesta.
+    mockData.tasks.push({ id: "vieja", title: "Vieja", updated_at: "2026-01-01T00:00:00Z" });
+
+    const result = await pullAndSyncFromSupabase();
+
+    expect(result!.pulledTasks).toBe(0);
+    expect(mockDb._tables.tasks.has("vieja")).toBe(false);
+  });
+
+  it("una fila NUEVA en la nube si se baja, sin tocar nada mas", async () => {
+    await pullAndSyncFromSupabase(); // marca ≈ 12:00
+    mockData.tasks.push({ id: "nueva", title: "Nueva", updated_at: "2026-10-02T11:59:30Z" });
+
+    const result = await pullAndSyncFromSupabase();
+
+    expect(result!.pulledTasks).toBe(1);
+    expect(mockDb._tables.tasks.has("nueva")).toBe(true);
+  });
+
+  it("un fallo de LECTURA no avanza la marca", async () => {
+    // El fallo que da miedo. Si la marca advanced antes de saber si la nube
+    // respondió, un corte de red dejaría el listón por delante de lo que se
+    // bajó, y las filas que no llegaron no volverían a pedirse nunca. Nunca se
+    // ve: la sincronización dice «al día» y miente.
+    mockFallo.select.tasks = "Fallo de red simulado";
+    await pullAndSyncFromSupabase();
+    expect([...store.keys()]).not.toContain("ald-a:marca:user-1");
+
+    mockFallo.filtros.length = 0;
+    delete mockFallo.select.tasks;
+    await pullAndSyncFromSupabase();
+
+    expect(mockFallo.filtros).toEqual([]); // se bajó TODO otra vez: no se perdió nada
+  });
+
+  it("un fallo de TUMBAS tampoco avanza la marca", async () => {
+    // Las tumbas son el protocolo de borrado. Si bajaran las tareas y fallaran
+    // las tumbas, un borrado hecho en otro dispositivo no se aplicaría y la
+    // tarea que borraste volvería a salir como activa en este.
+    mockFallo.select.tombstones = "Fallo de red simulado";
+    await pullAndSyncFromSupabase();
+
+    expect([...store.keys()]).not.toContain("ald-a:marca:user-1");
+
+    delete mockFallo.select.tombstones;
+    mockFallo.filtros.length = 0;
+    await pullAndSyncFromSupabase();
+
+    // Ahora si: se recupera, se baja de nuevo y ya se puede marcar.
+    expect(mockFallo.filtros).toEqual([]);
+    expect(store.get("ald-a:marca:user-1")).toBeDefined();
+  });
+
+  it("la marca es POR CUENTA: cambiar de usuario no hereda la marca de otro", async () => {
+    await pullAndSyncFromSupabase();
+    expect(store.get("ald-a:marca:user-1")).toBeDefined();
+
+    // Otro usuario entra en el mismo dispositivo. `ensureSyncOwner` borra lo
+    // local; si la marca fuera única, el usuario nuevo heredaría el «ya lo he
+    // bajado todo» del anterior y sus tareas no se pedirían jamás.
+    mockSession.userId = "user-2";
+    mockFallo.filtros.length = 0;
+
+    await pullAndSyncFromSupabase();
+
+    expect(mockFallo.filtros).toEqual([]);
+    expect(store.get("ald-a:marca:user-2")).toBeDefined();
   });
 });
 

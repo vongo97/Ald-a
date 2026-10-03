@@ -2,6 +2,7 @@ import { db, patchProject, patchTask, stampNow } from "./db";
 import { supabase } from "./supabase";
 import { mergeDecision, timestamp, type SyncRecord } from "./merge";
 import { useStore } from "./useStore";
+import { avanzarMarca, desdeDondeMirar } from "./marcaDeAgua";
 import type { Task, Project } from "@/domain/types";
 
 /** Fase A: Exportar datos a JSON */
@@ -94,6 +95,36 @@ async function ensureSyncOwner(userId: string): Promise<void> {
     localStorage.setItem(SYNC_OWNER_KEY, userId);
   } catch (err) {
     console.warn("[sync] No se pudo verificar la cuenta dueña de los datos:", err);
+  }
+}
+
+/**
+ * Hasta cuándo se ha bajado ya de este dispositivo. Una marca POR CUENTA.
+ *
+ * Por cuenta y no una sola porque `ensureSyncOwner` borra lo local al cambiar de
+ * cuenta: si la marca sobreviviera, el usuario nuevo heredaría el «ya lo he
+ * bajado todo» de otro, y sus tareas —que en esa nube no se han pedido nunca— no
+ * volverían a pedirse jamás. Pérdida silenciosa en el mismo sitio donde este
+ * módulo intenta evitar la pérdida silenciosa.
+ *
+ * Sin marca guardada se baja todo, que es el estado de partida correcto: no saber
+ * qué se bajó solo puede costar una bajada de más.
+ */
+const marcaClave = (userId: string) => `ald-a:marca:${userId}`;
+
+function leerMarca(userId: string): string | null {
+  try {
+    return localStorage.getItem(marcaClave(userId));
+  } catch {
+    return null; // Sin localStorage (tests, modo privado): bajada completa.
+  }
+}
+
+function guardarMarca(userId: string, marca: string): void {
+  try {
+    localStorage.setItem(marcaClave(userId), marca);
+  } catch (err) {
+    console.warn("[sync] No se pudo guardar la marca de bajada:", err);
   }
 }
 
@@ -332,10 +363,21 @@ export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
     // 1) Subir primero. Este paso es el que evita perder datos offline.
     const pushed = await pushLocalChanges();
 
-    // 2) Bajar tareas y proyectos.
+    // 2) Bajar tareas y proyectos, y SOLO lo que haya cambiado desde la última
+    //    vez. Antes eran `select("*")` sin filtro, y al subir la frecuencia a
+    //    30 segundos eso pasó a ser traerse la tabla entera cada medio minuto:
+    //    con 14 tareas da igual, con unos cientos es la cuota del proyecto y el
+    //    móvil despertándose cada 30 s para nada.
+    //
+    //    Sin marca previa el filtro no se aplica: la primera bajada tiene que
+    //    ser completa o el dispositivo arrancaría sin nada.
+    const desde = desdeDondeMirar(leerMarca(userId));
+    const qProjects = supabase.from("projects").select("*");
+    const qTasks = supabase.from("tasks").select("*");
+
     const [{ data: pData, error: pErr }, { data: tData, error: tErr }] = await Promise.all([
-      supabase.from("projects").select("*"),
-      supabase.from("tasks").select("*"),
+      desde ? qProjects.gt("updated_at", desde) : qProjects,
+      desde ? qTasks.gt("updated_at", desde) : qTasks,
     ]);
     if (pErr || tErr) {
       console.error("Pull abortado (la nube falló, lo local se conserva):", pErr ?? tErr);
@@ -356,8 +398,16 @@ export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
     // 3) Bajar tumbas para aplicar borrados remotos.
     //    El `.eq("user_id", userId)` es redundante con RLS, pero deja la
     //    intención explícita y protege si la política llegara a relajarse.
+    //    También van filtradas por `updated_at`: sin eso, cada tombstone se
+    //    seguiría bajando para siempre aunque su borrado se aplicara hace meses.
     const [{ data: tombData, error: tombErr }] = await Promise.all([
-      supabase.from("tombstones").select("id, kind, updated_at").eq("user_id", userId),
+      desde
+        ? supabase
+            .from("tombstones")
+            .select("id, kind, updated_at")
+            .eq("user_id", userId)
+            .gt("updated_at", desde)
+        : supabase.from("tombstones").select("id, kind, updated_at").eq("user_id", userId),
     ]);
     if (tombErr) console.error("Pull de tumbas falló:", tombErr);
 
@@ -428,6 +478,19 @@ export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
         await db.tombstones.put({ id: raw.id, kind: raw.kind as "tasks" | "projects", updatedAt: raw.updated_at });
       }
     });
+
+    // La marca se avanza AQUÍ, después de haber leído, y solo si no hubo ningún
+    // fallo de lectura.
+    //
+    // Si se avanzara antes, un corte de red dejaría el listón por delante de lo
+    // que realmente se bajó, y las filas que no llegaron no volverían a pedirse
+    // nunca. Eso no lo arregla ni reinstalar la app, y es el peor fallo posible
+    // aquí porque no se ve en ninguna parte: la sincronización dice «al día» y
+    // no lo está.
+    //
+    // Una tumba que falló también lo bloquea. Sin ella, un borrado hecho en otro
+    // dispositivo no se aplicaría y la tarea que borraste volvería a salir.
+    if (!tombErr) guardarMarca(userId, avanzarMarca(leerMarca(userId)));
 
     useStore.getState().setSyncStatus("synced");
     return {
