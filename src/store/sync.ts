@@ -341,7 +341,54 @@ export interface SyncSummary {
  */
 export { esCaidaDeRed };
 
-export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
+/**
+ * Cuántas sincronizaciones hay en marcha. Como mucho una.
+ *
+ * No había ninguna guarda, y hay seis disparadores independientes: el poller de
+ * 30 segundos, `focus`, `visibilitychange`, `online`, el arranque al conocer la
+ * sesión, y el botón «Reintentar ahora». Seis llamadas a la misma función que
+ * suben y bajan filas, y nada impedía que dos estuvieran dentro a la vez.
+ *
+ * Por qué importa: dos sincronizaciones que leen la nube, comparan y suben las
+ * MISMAS filas se estorban en Postgres. Cada `upsert` bloquea la fila que el otro
+ * está tocando, y el lote grande espera a que el pequeño termine. Con eso, una
+ * subida puede tardar mucho más de lo normal y expire por tiempo de espera: el
+ * cliente ve un fallo de red, dice «14 sin subir», y al minuto un reintento —ya
+ * solo, sin nada que lo estorbe— sube las catorce. Que es exactamente lo que pasó
+ * y que nadie supo explicar.
+ *
+ * No se puede decir que fuera ESTO lo que pasó. Se midieron las columnas que la
+ * app manda y todas existen, así que la causa queda sin determinar. Pero el
+ * agujero era real y el poller de 30 segundos, que metí yo, lo hizo más probable:
+ * antes la sincronización solo pasaba cuando alguien la pedía.
+ *
+ * Si ya hay una en marcha, la nueva NO empieza otra: devuelve la que está
+ * corriendo. Quien la pidió espera a que termine y recibe su resultado, que es lo
+ * que quería. Pulsar «Reintentar ahora» con una sincronización en marcha no hace
+ * nada visible —correcto: ya se está reconectando— y en vez de duplicar el
+ * trabajo.
+ */
+let sincronizacionEnMarcha: Promise<SyncSummary | null> | null = null;
+
+export function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
+  if (sincronizacionEnMarcha) return sincronizacionEnMarcha;
+  // `then` con los DOS manejadores y no `finally`: `finally` devuelve una promesa
+  // nueva y, si la de dentro rechazase, quedaría una promesa rechazada sin
+  // capturar. Es el mismo tropiezo que ya se corrigió en poller.ts.
+  sincronizacionEnMarcha = sincronizarAhora().then(
+    (r) => {
+      sincronizacionEnMarcha = null;
+      return r;
+    },
+    (e) => {
+      sincronizacionEnMarcha = null;
+      throw e;
+    },
+  );
+  return sincronizacionEnMarcha;
+}
+
+async function sincronizarAhora(): Promise<SyncSummary | null> {
   const userId = await sessionUserId();
   if (!userId) return null; // Sin cuenta no hay nube: todo sigue siendo local.
 

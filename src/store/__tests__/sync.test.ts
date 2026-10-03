@@ -71,6 +71,13 @@ const { mockData, mockSession, mockDb, mockFallo } = vi.hoisted(() => {
       await fn();
     },
     _tables: tables,
+    /**
+     * Cuántas veces se ha LEÍDO de la nube. Es lo que hace falta para demostrar
+     * que dos sincronizaciones simultáneas no se solapan: si se solaparan, el
+     * número se duplicaría, y eso no depende de cuántas consultas haga cada una
+     * por dentro.
+     */
+    _lecturas: 0,
   };
 
   return { mockData, mockSession, mockDb, mockFallo };
@@ -120,12 +127,14 @@ vi.mock("../supabase", () => ({
         then: (
           resolve: (v: { data: Record<string, unknown>[]; error: { message: string } | null }) => unknown,
           reject?: (e: unknown) => unknown,
-        ) =>
-          Promise.resolve(
+        ) => {
+          mockDb._lecturas++;
+          return Promise.resolve(
             mockFallo.select[table] !== undefined
               ? { data: [], error: { message: mockFallo.select[table] } }
               : { data: applyFilters(store()), error: null },
-          ).then(resolve, reject),
+          ).then(resolve, reject);
+        },
       };
       return {
         select: (_cols?: string) => selectResult,
@@ -216,6 +225,7 @@ function resetAll() {
   for (const k of Object.keys(mockFallo.upsert)) delete mockFallo.upsert[k];
   mockFallo.upsertFila = null;
   mockFallo.filtros.length = 0;
+  mockDb._lecturas = 0;
   mockEstadoSync.pendingUpload = 0;
   mockEstadoSync.pendingError = null;
   mockSetSyncStatus.mockClear();
@@ -786,6 +796,92 @@ describe("la bajada solo pide lo que ha cambiado", () => {
 
     expect(mockFallo.filtros).toEqual([]);
     expect(store.get("ald-a:marca:user-2")).toBeDefined();
+  });
+});
+
+// ─── Dos sincronizaciones no se solapan ─────────────────────────────────────
+//
+// Seis disparadores llaman a la misma función —el poller de 30 s, `focus`,
+// `visibilitychange`, `online`, el arranque y «Reintentar ahora»— y no había
+// ninguna guarda. Dos sincronizaciones a la vez leen la nube, comparan y suben
+// las MISMAS filas; cada `upsert` bloquea la fila que el otro está tocando, y el
+// lote grande espera al pequeño. Una subida puede así tardar mucho más de lo
+// normal y caducar por tiempo de espera: el cliente ve un fallo, dice «14 sin
+// subir», y al minuto un reintento ya a solas las sube todas. Que es lo que pasó
+// y que nadie supo explicar.
+//
+// Estos tests no demuestran que fuera eso. Demuestran que dos llamadas seguidas
+// NO se solapan, que es lo que sí se puede demostrar sin una nube delante.
+describe("dos sincronizaciones no se solapan", () => {
+  /** Cuántas veces se lee de la nube en exactamente una sincronización. */
+  async function lecturasDeUna(): Promise<number> {
+    mockDb._lecturas = 0;
+    await pullAndSyncFromSupabase();
+    const n = mockDb._lecturas;
+    expect(n).toBeGreaterThan(0);
+    return n;
+  }
+
+  it("dos llamadas a la vez leen la nube lo MISMO que una sola", async () => {
+    const una = await lecturasDeUna();
+
+    mockDb._lecturas = 0;
+    const [a, b] = await Promise.all([pullAndSyncFromSupabase(), pullAndSyncFromSupabase()]);
+
+    // Si se solaparan, aquí saldría el doble. Y las dos reciben el mismo
+    // resultado, que es lo que quiere quien ha pedido la segunda: que la app
+    // esté al día, no que dos sincronizaciones vayan a la vez.
+    expect(mockDb._lecturas).toBe(una);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+  });
+
+  it("la segunda llamada devuelve la MISMA promesa, no una parecida", async () => {
+    const p1 = pullAndSyncFromSupabase();
+    const p2 = pullAndSyncFromSupabase();
+    expect(p1).toBe(p2);
+    const [r1, r2] = await Promise.all([p1, p2]);
+    expect(r1).toEqual(r2);
+  });
+
+  it("terminada una, la siguiente sí empieza", async () => {
+    const una = await lecturasDeUna();
+
+    mockDb._lecturas = 0;
+    await pullAndSyncFromSupabase();
+    await pullAndSyncFromSupabase();
+
+    // El doble. Si la guarda no se soltara, la segunda devolvería la primera y
+    // esto daría una vez, no dos: la app se quedaría sincronizándose una sola vez
+    // en cada arranque y para siempre.
+    expect(mockDb._lecturas).toBe(una * 2);
+  });
+
+  it("sin sesión, la llamada nueva no hereda nada de la anterior", async () => {
+    const una = await lecturasDeUna();
+    mockDb._lecturas = 0;
+    mockSession.userId = null;
+
+    // La guarda se suelta también por el camino de «no hay sesión». Si no, sin
+    // sesión devolvería el resultado de la anterior y parecería que hay tareas.
+    expect(await pullAndSyncFromSupabase()).toBeNull();
+    expect(mockDb._lecturas).toBe(0);
+
+    mockSession.userId = "user-1";
+    await pullAndSyncFromSupabase();
+    expect(mockDb._lecturas).toBe(una);
+  });
+
+  it("un fallo suelta la guarda: el siguiente reintento se intenta", async () => {
+    // Si el manejador de error no limpiara el estado, la app se quedaría con una
+    // promesa clavada y no volvería a sincronizar en toda la sesión. Y no habría
+    // ni un error visible: el indicador se quedaría en «sincronizando» para
+    // siempre. Es el mismo tropiezo que ya se corrigió una vez en poller.ts, en el
+    // otro sentido.
+    mockFallo.select.tasks = "Fallo de red simulado";
+    expect(await pullAndSyncFromSupabase()).toBeNull();
+    delete mockFallo.select.tasks;
+    expect(await pullAndSyncFromSupabase()).not.toBeNull();
   });
 });
 
