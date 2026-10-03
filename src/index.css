@@ -297,12 +297,32 @@
   margin-right: 8px;
   vertical-align: middle;
 }
-/* …pero solo donde puede estar «delante». En una fila (`.task-card`, o
-   un `.card` que es `flex items-center`) el `::before` es un ítem flex y
-   se alinea con el contenido. En un panel el contenedor es bloque: el
-   punto cae en una línea propia y deja 24px de hueco fantasma encima
-   del header (medido: la rejilla del mes pasaba de 376 a 400). Nunca
-   estuvo delante de nada ahí, solo ocupaba sitio. */
+/* …y en las fichas de tarea tampoco puede estar en el flujo.
+   El comentario que había aquí decía que en una fila el `::before` era un ítem
+   flex y se alineaba con el contenido. Eso es FALSO para `.task-card`: la ficha
+   es `display: block`, así que el punto se creaba su propia línea encima del
+   contenido. Medido en el navegador: una ficha de 89px con 47px de contenido y
+   16 de padding, o sea 26px de hueco fantasma en cada una. Con veinte tareas,
+   medio metro vertical de nada.
+
+   Lo que hace Gabinete con su alfiler es lo correcto: `position: relative` en
+   la ficha y el adorno fuera del flujo. El punto queda pegado al borde
+   izquierdo y centrado en vertical, sin ocupar alto. */
+[data-theme="cronodisco"] .task-card {
+  position: relative;
+}
+[data-theme="cronodisco"] .task-card::before {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  margin-right: 0;
+  transform: translateY(-50%);
+}
+
+/* …y en un panel tampoco puede estar delante: el contenedor es bloque, el punto
+   cae en una línea propia y deja 24px de hueco fantasma encima del header
+   (medido: la rejilla del mes pasaba de 376 a 400). Nunca estuvo delante de nada
+   ahí, solo ocupaba sitio. */
 [data-theme="cronodisco"] .card-panel::before {
   display: none;
 }
