@@ -41,11 +41,24 @@ export default function Toasts() {
     // Contenedor vivo: los avisos ("Tarea creada · Deshacer") son
     // transitorios y de nada sirven si el lector de pantalla no los anuncia.
     // atomic=false para que solo se anuncie el aviso nuevo, no todos.
+    //
+    // ARRIBA, y no abajo como estaba. Abajo ya vive el dock de navegación, que
+    // es `fixed bottom-4` con 59px de alto; el aviso era `fixed bottom-5` con 62.
+    // Veinte contra dieciseis: las dos cajas ocupaban la misma banda y se
+    // solapaban 416 x 55 px. Medido en el navegador. El dock, que es `glass` al
+    // 78 %, tapaba el aviso y se transparenta encima de el, así que el aviso se
+    // leía como una caja gris apagada encima de la lista de tareas.
+    //
+    // No se ha resuelto calculando el alto del dock y subirlos lo justo: ese alto
+    // depende de los iconos y de la fuente, así que el día que se añada uno, o
+    // que la fuente cargue distinta, vuelven a cruzarse sin que nada se entere.
+    // Arriba no hay nada con quien cruzarse. `top-14` son 56px, y la cabecera
+    // `sticky` mide 49: el aviso queda debajo de ella y por delante en z-50.
     <div
       role="status"
       aria-live="polite"
       aria-atomic="false"
-      className="pointer-events-none fixed bottom-5 left-1/2 z-50 flex w-full max-w-md -translate-x-1/2 flex-col items-center gap-2 px-4"
+      className="pointer-events-none fixed top-14 left-1/2 z-50 flex w-full max-w-md -translate-x-1/2 flex-col items-center gap-2 px-4"
     >
       {toasts.map((t) => (
         <ToastItem key={t.id} {...t} />
