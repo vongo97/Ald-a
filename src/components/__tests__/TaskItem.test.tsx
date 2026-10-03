@@ -195,4 +195,29 @@ describe("el editor en línea responde al teclado", () => {
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Guardar" })).toBeTruthy();
   });
+
+  it("la ficha lleva `task-card-alta` solo mientras está desplegada", async () => {
+    // El «cajón» del que hablaba quien usa la app. En Cronodisco la ficha hereda
+    // `--radius: 999px`, y eso no significa «redondo»: el navegador lo recorta a
+    // la MITAD del alto. Con la fila cerrada son 37px de curva y se lee como una
+    // teja de reloj; abierta, con el editor dentro, son 185px y se convierte en un
+    // balón. La clase es el sitio donde colgar «esta ya no es una fila»; en los
+    // otros seis temas no hace nada.
+    //
+    // Se comprueba la clase, no el píxel: el radio sale de una hoja de estilos y
+    // jsdom no la aplica. El píxel se midió en el navegador —74px cerrada, 370px
+    // abierta— y está en el mensaje del commit.
+    const user = await montar();
+    const ficha = () => screen.getByText(tarea().title).closest(".task-card")!;
+
+    expect(ficha().className).not.toMatch(/task-card-alta/);
+
+    // Desplegar = pulsar el título.
+    await user.click(screen.getByRole("button", { name: tarea().title }));
+    expect(ficha().className).toMatch(/task-card-alta/);
+
+    // Y al plegarse, vuelve a ser una fila.
+    await user.click(screen.getByRole("button", { name: tarea().title }));
+    expect(ficha().className).not.toMatch(/task-card-alta/);
+  });
 });

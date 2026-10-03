@@ -311,6 +311,20 @@
 [data-theme="cronodisco"] .task-card {
   position: relative;
 }
+
+/* …y una ficha abierta deja de ser una teja de reloj.
+   `border-radius: 999px` no significa «redondo»: el navegador lo recorta a la
+   mitad del alto. Con la fila cerrada (74px) salen curvas de 37px y la ficha se
+   lee como una teja. Abierta, con el editor dentro, llega a 370px: curvas de
+   185px y un balón con el formulario dentro. Es el mismo problema que
+   `.card-panel` ya tenía resuelto con su `--radius-panel`, aplicado a la ficha
+   cuando deja de ser una fila.
+
+   Solo Cronodisco. En los otros seis temas las fichas no son píldoras y esta
+   regla no hace nada. */
+[data-theme="cronodisco"] .task-card-alta {
+  border-radius: var(--radius-panel);
+}
 [data-theme="cronodisco"] .task-card::before {
   position: absolute;
   left: 4px;

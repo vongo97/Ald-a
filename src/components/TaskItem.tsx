@@ -94,7 +94,13 @@ export default function TaskItem({ task, showScore = false }: { task: Task; show
   };
 
   return (
-    <div className={`card task-card px-3 py-2 ${done ? "opacity-50 done" : ""}`}>
+    // `task-card-alta` solo la mira Cronodisco, y solo para esto: una fila cerrada
+    // es una píldora, pero en cuanto la ficha crece deja de serlo. `border-radius:
+    // 999px` se recorta a la MITAD del alto, así que una ficha de 74px tiene
+    // curvas de 37px (una teja) y una de 370px tiene curvas de 185px: un balón
+    // con el editor flotando dentro. La clase no cambia nada en los otros seis
+    // temas; solo da un sitio donde colgar «esta ya no es una fila».
+    <div className={`card task-card px-3 py-2 ${expanded ? "task-card-alta" : ""} ${done ? "opacity-50 done" : ""}`}>
       <div className="flex items-start gap-2">
         <button
           type="button"
