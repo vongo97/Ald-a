@@ -90,8 +90,55 @@ export async function patchProject(id: string, changes: Partial<Project>): Promi
   await db.projects.update(id, "updatedAt" in changes ? changes : { ...changes, updatedAt: stampNow() });
 }
 
+/**
+ * Un identificador con FORMA de uuid v4, siempre.
+ *
+ * Antes esto era `crypto.randomUUID?.() ?? \`t-<base36>-<algo>\``. El respaldo
+ * era el problema, no una red de seguridad: la columna de la nube es
+ * `id uuid NOT NULL`, así que un id con otra forma no es que suba tarde — es que
+ * NO PUEDE subir nunca. La tarea se queda en «pendiente» para siempre, sin error
+ * visible, y solo se va si la borras y la vuelves a crear.
+ *
+ * Y el respaldo no era una casualidad: `crypto.randomUUID` solo existe en un
+ * CONTEXTO SEGURO, y un contexto seguro es https, localhost o… nada más. Abrir
+ * la app en el móvil por la IP de la Wi-Fi (http://192.168.20.34:4179) es HTTP sin
+ * cifrar, luego no lo es. Medido en ese origen:
+ *
+ *     isSecureContext: false    crypto.randomUUID: undefined
+ *
+ * y el id que salía era `t-murt2nzz-qn6mnx`. En `http://localhost:4179` el
+ * mismo navegador da `isSecureContext: true` y un uuid de verdad. Por eso en el
+ * escritorio esto no lo ha visto nadie en tres sesiones: en el escritorio nunca
+ * pasa.
+ *
+ * La corrección es que el respaldo tenga la forma correcta. No hace falta
+ * `randomUUID` para eso: `crypto.getRandomValues` sí está disponible fuera de
+ * contexto seguro —también medido, `function` en el mismo origen sin cifrar— y
+ * con sus 16 bytes se monta un uuid v4 sin depender de nada mas.
+ *
+ * Último respaldo con `Math.random`, para un navegador tan viejo que no tenga ni
+ * `getRandomValues`. No es entropía criptográfica, y aquí no hace falta: son
+ * identificadores de las tareas de una persona, bajo RLS, no tokens. Lo que no
+ * es admisible es que tengan OTRA FORMA, porque eso ya no depende de la
+ * entropía sino del tipo de la columna.
+ */
+function uuidV4(): string {
+  const bytes = new Uint8Array(16);
+  if (typeof crypto?.getRandomValues === "function") {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  // Bits de versión (4) y de variante (RFC 4122), que es lo que distingue un
+  // uuid de un numero hexadecimal de 32 signos con guiones puestos.
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 const uid = (): string =>
-  crypto.randomUUID?.() ?? `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : uuidV4();
 
 export const newId = uid;
 
