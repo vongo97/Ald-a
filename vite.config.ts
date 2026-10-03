@@ -43,7 +43,12 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    // `scripts/` entra porque hay un test que compara la cadena de `npm run ci`
+    // con los pasos del workflow, y no es del código de la app sino de que los
+    // dos ejecuten lo mismo. Si no estuviera aquí, ese test no existiría en la
+    // práctica: vitest ni lo miraría, y parecería que lo cubre algo que no lo
+    // cubre. Ver scripts/ciMismoQueElWorkflow.test.ts.
+    include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
     // IndexedDB real en memoria: permite testear `actions.ts` contra el Dexie
     // de verdad en vez de contra un doble que se parece cada vez menos.
     // Ver src/test-setup.ts.

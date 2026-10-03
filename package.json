@@ -11,7 +11,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b",
     "csp:hash": "node scripts/csp-hash.mjs",
-    "csp:hash:write": "node scripts/csp-hash.mjs --write"
+    "csp:hash:write": "node scripts/csp-hash.mjs --write",
+    "ci": "npm run typecheck && npm test && npm run build && npm audit --audit-level=high",
+    "hooks:install": "git config core.hooksPath .githooks && echo Git ya usa .githooks/"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

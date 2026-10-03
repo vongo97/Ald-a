@@ -1,0 +1,36 @@
+#!/bin/sh
+# Lo mismo que el CI, antes de que el push llegue a ningun sitio.
+#
+# Existe por un hecho concreto, no por prudencia. El CI estuvo trece pushes en
+# rojo seguidos y nadie lo noto. No porque no lo ejecutara GitHub, sino porque
+# ejecutarlo no obliga a mirarlo: el paso cae en una pestana que no hay que abrir
+# nunca. Y en mi caso era peor, porque yo tampoco ejecutaba la cadena entera
+# localmente: lanzaba `tsc -b`, `vite build` y `vitest` por separado, que es casi
+# lo mismo pero no es lo mismo, y en mi maquina el `.env` tapaba un agujero que
+# en el CI hacia fallar los tests. Todo en verde, aqui y en local, y el CI en
+# rojo trece veces.
+#
+# Este hook no arregla eso por arte de magia: ejecuta EXACTAMENTE la cadena que
+# ejecuta el workflow, la de `npm run ci`. Un test (scripts/ciMismoQueElWorkflow.test.ts)
+# comprueba que las dos cosas no se separan nunca.
+#
+# Se activa una vez, con `npm run hooks:install`. Va aparte porque los hooks no
+# se distribuyen con un clon: git solo los lee del repositorio si se le dice que
+# mire en otro sitio, y no se puede forzar desde el repositorio. Si el hook no
+# esta activo, todo lo de aqui sigue siendo cierto y no pasa nada.
+#
+# Por que aborta el push y no avisa: un aviso que se puede pasar por alto es
+# exactamente lo que ya ha pasado trece veces. Si esto molesta, la salida es
+# quitar el hook, no ignorarlo a diario.
+set -e
+
+if [ -n "$ALDAR_A_SALTAR_PRE_PUSH" ]; then
+  echo "ALDAR_A_SALTAR_PRE_PUSH está puesto: el push va sin comprobar."
+  exit 0
+fi
+
+echo ""
+echo "Comprobando antes de subir (lo mismo que el CI)..."
+echo ""
+
+npm run ci
