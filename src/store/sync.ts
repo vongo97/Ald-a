@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 import { mergeDecision, timestamp, type SyncRecord } from "./merge";
 import { useStore } from "./useStore";
 import { avanzarMarca, desdeDondeMirar } from "./marcaDeAgua";
+import { esCaidaDeRed } from "./caidaDeRed";
 import type { Task, Project } from "@/domain/types";
 
 /** Fase A: Exportar datos a JSON */
@@ -334,25 +335,11 @@ export interface SyncSummary {
 /**
  * ¿Este error es «no hay red» y no «la app ha fallado»?
  *
- * Un fallo de red llega como un `TypeError` de `fetch` envuelto, sin código
- * HTTP: nunca hubo respuesta. Un fallo de verdad (RLS, SQL, tabla que no
- * existe) llega con su código y su mensaje. La app no tiene por qué poner un
- * punto rojo de alarma al usuario que está en modo avión con todo su trabajo
- * a salvo en el dispositivo.
- *
- * Exportada para tests: la diferencia entre «rojo de alarma» y «gris tranquilo»
- * es justo la clase de cosa que no debe depender de cómo se redactó el mensaje.
+ * Vive en `caidaDeRed.ts` porque no depende de nada, y desde aquí se arrastraba
+ * al cliente de Supabase entero. `sync.ts` la reexporta para no mover el resto
+ * de llamadas.
  */
-export function esCaidaDeRed(err: unknown): boolean {
-  if (!err) return false;
-  const msg = String((err as { message?: unknown })?.message ?? err).toLowerCase();
-  if (/typeerror|failed to fetch|networkerror|network request failed|econnrefused|err_internet_disconnected|load failed/.test(msg)) {
-    return true;
-  }
-  // `navigator.onLine === false` es una señal débil y a veces falsa, pero cuando
-  // dice que no hay red, es que no hay red.
-  return typeof navigator !== "undefined" && navigator.onLine === false;
-}
+export { esCaidaDeRed };
 
 export async function pullAndSyncFromSupabase(): Promise<SyncSummary | null> {
   const userId = await sessionUserId();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { esCaidaDeRed } from "../sync";
+import { esCaidaDeRed } from "../caidaDeRed";
 
 /**
  * Qué color pinta el puntito de la barra de navegación.
