@@ -31,10 +31,10 @@ jobs:
 
     steps:
       - name: Codigo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           # 22 es la LTS mas compatible con el stack (vite 7 y vitest 4 piden
           # 20.19+). Si en local se usa otra, conviene que el CI la use tambien.
