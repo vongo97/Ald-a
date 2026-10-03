@@ -26,7 +26,14 @@ concurrency:
 jobs:
   verify:
     name: Tipos, tests y build
-    runs-on: ubuntu-latest
+    # Anclado a la version, no `ubuntu-latest`.
+    #
+    # GitHub avisa de que `ubuntu-latest` pasa a Ubuntu 26 el 19 de octubre de
+    # 2026. Ese dia, sin querer, este workflow cambia de sistema operativo y
+    # puede empezar a fallar por cosas que no hemos tocado. Con la version
+    # escrita, el salto a 26 lo hacemos nosotros, en un commit, y se ve en el
+    # diff.
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
 
     steps:
