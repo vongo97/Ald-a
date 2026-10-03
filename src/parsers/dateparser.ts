@@ -154,8 +154,17 @@ export function parseDate(input: string, today: Date = new Date()): DateParse {
       date = nextWeekday(today, WEEKDAYS[normalizeWeekday(m[1])]);
       if (date.getTime() <= today.getTime()) date = addDays(date, 7);
       consume(m);
-    } else if ((m = text.match(/\b(el\s+)?(domingo|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado)\b(?!\s+y\b)/))) {
-      date = nextWeekday(today, WEEKDAYS[normalizeWeekday(m[2])]);
+    } else if (
+      // Un día suelto ("antes del viernes", "por el lunes", "el viernes"). Los
+      // conectores van DENTRO del trozo consumido porque si no se queda el
+      // "del" colgando y el título sale así: "Entregar el informe antes del" —
+      // que es lo que llevaba años pasando y nadie miró, porque la fecha
+      // siempre era correcta y el fallo solo se ve en la palabra.
+      (m = text.match(
+        /\b(?:(?:de|del|al|en|para|por|antes|hasta|durante|el|este|esta|ese|esa)\s+)*(domingo|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado)\b(?!\s+y\b)/,
+      ))
+    ) {
+      date = nextWeekday(today, WEEKDAYS[normalizeWeekday(m[1])]);
       if (date.getTime() <= today.getTime()) date = addDays(date, 7);
       consume(m);
     }

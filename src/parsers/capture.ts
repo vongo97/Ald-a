@@ -128,10 +128,24 @@ export function parseCapture(input: string, ctx: CaptureContext = {}): ParsedCap
 
   // --- Fecha / hora / recurrencia ------------------------------------------
   const dp = parseDate(text, now);
-  if (dp.date) {
+  // Se retira tanto si hubo fecha como si solo hubo recurrencia. Antes solo se
+  // quitaba cuando existía `dp.date`, y eso hacía que "los viernes" (que además
+  // fija fecha) desapareciera del título mientras que "todos los meses" se
+  // quedaba dentro: la misma frase escrita de dos formas daba dos resultados
+  // distintos. Quitarlo va por los dos casos o no va por ninguno.
+  {
     // Retirar el texto de fecha consumido (case-insensitive)
     for (const frag of dp.matched) {
       const re = new RegExp(frag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      // Salvedad que decidió quien usa la app: si el trozo de fecha es lo que
+      // ABRE la frase, se queda en el título. "El viernes hay reunión" perdería
+      // el sujeto y salía "hay reunión de equipo", que ya no se lee como una
+      // tarea. Al final sí sobra, y ahí se quita como siempre: "Llamar al
+      // proveedor mañana" → "Llamar al proveedor" con la fecha puesta.
+      if (new RegExp(`^\\s*${re.source}`, "i").test(text)) {
+        matched.push(frag);
+        continue;
+      }
       text = text.replace(re, " ");
       matched.push(frag);
     }
@@ -164,7 +178,11 @@ export function parseCapture(input: string, ctx: CaptureContext = {}): ParsedCap
 
   // --- Limpieza -------------------------------------------------------------
   const title = text
-    .replace(/\b(?:a las?|el|para|durante)\s*$/i, "")
+    // Red de seguridad: si tras quitar la fecha queda una preposición colgando
+    // al final («...antes del»), se va también. La regla anterior ya consume el
+    // "del" con el día; esto recoge lo que se escape sin tocar nada más, porque
+    // solo actúa al final y con palabra completa detrás.
+    .replace(/\s*\b(?:a las?|el|del|de|los|las|para|por|antes|hasta|durante|en)\s*$/i, "")
     .replace(/\s{2,}/g, " ")
     .replace(/^\s+|\s+$/g, "");
 
