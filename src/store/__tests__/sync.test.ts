@@ -17,6 +17,15 @@ const { mockData, mockSession, mockDb, mockFallo } = vi.hoisted(() => {
   const mockFallo = {
     select: {} as Record<string, string>,
     upsert: {} as Record<string, string>,
+    /**
+     * Falla por fila, no por lote. Es lo que hace falta para probar el reintento
+     * uno a uno: si solo se puede fallar el lote entero, todos los tests dicen
+     * «se cayó entero» y ninguno comprueba que se encuentre al culpable.
+     *
+     * Recibe el tamaño del lote porque hay un caso que solo se puede provocar
+     * así: que la petición de varias filas se caiga y las de una sola pasen.
+     */
+    upsertFila: null as null | ((row: Record<string, unknown>, lote: number) => string | null),
   };
 
   // Almacén en memoria que hace de Dexie
@@ -106,10 +115,18 @@ vi.mock("../supabase", () => ({
       return {
         select: (_cols?: string) => selectResult,
         upsert: (rows: Record<string, unknown> | Record<string, unknown>[]) => {
+          const arr = Array.isArray(rows) ? rows : [rows];
+          // Una fila mala tumba el lote entero, como en Postgres: por eso se
+          // comprueba TODO el lote antes de guardar nada.
           if (mockFallo.upsert[table] !== undefined) {
             return Promise.resolve({ error: { message: mockFallo.upsert[table] } });
           }
-          const arr = Array.isArray(rows) ? rows : [rows];
+          if (mockFallo.upsertFila) {
+            for (const row of arr) {
+              const motivo = mockFallo.upsertFila(row, arr.length);
+              if (motivo) return Promise.resolve({ error: { message: motivo } });
+            }
+          }
           for (const row of arr) {
             const existing = store().find((r) => r.id === row.id);
             if (existing) Object.assign(existing, row);
@@ -182,6 +199,7 @@ function resetAll() {
   mockSession.userId = "user-1";
   for (const k of Object.keys(mockFallo.select)) delete mockFallo.select[k];
   for (const k of Object.keys(mockFallo.upsert)) delete mockFallo.upsert[k];
+  mockFallo.upsertFila = null;
   mockEstadoSync.pendingUpload = 0;
   mockEstadoSync.pendingError = null;
   mockSetSyncStatus.mockClear();
@@ -329,9 +347,66 @@ describe("queda constancia de lo que no se ha subido", () => {
 
     await pullAndSyncFromSupabase();
 
-    expect(mockSetPendingUpload).toHaveBeenCalledWith(2, 'column "recurrence" does not exist');
+    // Ahora el mensaje dice además que NO subió ninguna de las dos, que es lo
+    // que el número por sí solo ya no explica.
+    expect(mockSetPendingUpload).toHaveBeenCalledWith(
+      2,
+      'No se subió ninguna de 2: column "recurrence" does not exist',
+    );
     // Y de verdad no llegaron: el punto de todo esto es no fingir.
     expect(mockData.tasks).toHaveLength(0);
+  });
+
+  it("si una sola fila está mala, se sube el resto y se nombra a la culpable", async () => {
+    // ESTE es el fallo que se vio en la app: el indicador decía «14 tareas sin
+    // subir» y al reintentar a mano subieron las 14 sin tocar ninguna. El lote
+    // entero se cae por una fila, así que al repetirlo ya no había ninguna rota.
+    //
+    // Lo que faltaba era señalar cuál. Ahora, tras el fallo del lote, se va fila
+    // por fila: las buenas suben y la culpable se nombra con el mensaje del
+    // servidor.
+    mockFallo.upsertFila = (row) =>
+      row.id === "local-2" ? "invalid input syntax for type uuid" : null;
+
+    mockDb._tables.tasks.set("local-1", {
+      id: "local-1", title: "Creada offline", updatedAt: "2026-01-01T00:00:00Z",
+    });
+    mockDb._tables.tasks.set("local-2", {
+      id: "local-2", title: "La que esta rota", updatedAt: "2026-01-02T00:00:00Z",
+    });
+    mockDb._tables.tasks.set("local-3", {
+      id: "local-3", title: "Otra offline", updatedAt: "2026-01-03T00:00:00Z",
+    });
+
+    await pullAndSyncFromSupabase();
+
+    // Una sola pendiente, NO tres: las otras dos están a salvo en la nube y
+    // decir «3 sin subir» sería la misma mentira que no se inventaba la cifra,
+    // solo que al revés.
+    expect(mockSetPendingUpload).toHaveBeenCalledWith(
+      1,
+      '«La que esta rota» no se pudo subir: invalid input syntax for type uuid',
+    );
+    // Y de verdad: las dos buenas llegaron y la rota no. Nada de «debería».
+    expect(mockData.tasks.map((t) => t.id).sort()).toEqual(["local-1", "local-3"]);
+  });
+
+  it("si el lote se cae pero cada fila va bien, no se culpa a ninguna", async () => {
+    // El lote falló y por separado todo fue bien: entonces el problema era el
+    // lote, no una fila. Inventar un culpable sería mentir con más detalle.
+    mockFallo.upsertFila = (_row, lote) => (lote > 1 ? "row too long" : null);
+    mockDb._tables.tasks.set("local-1", {
+      id: "local-1", title: "Una", updatedAt: "2026-01-01T00:00:00Z",
+    });
+    mockDb._tables.tasks.set("local-2", {
+      id: "local-2", title: "Dos", updatedAt: "2026-01-02T00:00:00Z",
+    });
+
+    await pullAndSyncFromSupabase();
+
+    // Cero pendientes y sin motivo: el reintento por fila lo resolvió.
+    expect(mockSetPendingUpload).toHaveBeenCalledWith(0, null);
+    expect(mockData.tasks).toHaveLength(2);
   });
 
   it("si la nube no se puede LEER, no se inventa una cifra de pendientes", async () => {

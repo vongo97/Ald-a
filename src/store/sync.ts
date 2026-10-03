@@ -126,24 +126,78 @@ export function toRemote(row: Record<string, unknown>): Record<string, unknown> 
   };
 }
 
+/** Cuánto quedó sin subir de una tanda, y por qué. */
+export interface ResultadoSubida {
+  /** Cuántas filas NO pudieron subirse. 0 significa que todo fue bien. */
+  fallos: number;
+  /** El motivo, con el mensaje literal del servidor. */
+  mensaje: string | null;
+}
+
+const SUBIDA_BIEN: ResultadoSubida = { fallos: 0, mensaje: null };
+
 /**
- * Sube un lote de tareas (upsert por id). Silencioso si no hay sesión.
- * Devuelve el mensaje de error de Supabase, o `null` si fue bien.
+ * Explica el fallo en una frase que se pueda entender.
+ *
+ * El detalle que importa es la diferencia entre «no subió ninguna» y «subieron
+ * trece y esta no». Con el mismo mensaje de error para las dos, quien lee el
+ * indicador no sabe si tiene un problema o catorce, y el número de pendientes
+ * ya dice cuál de las dos es.
+ */
+function describirFallo(malas: { titulo: string; motivo: string }[], total: number): string {
+  if (malas.length === 0 || total === 0) return "error desconocido";
+  if (malas.length === 1) return `«${malas[0].titulo}» no se pudo subir: ${malas[0].motivo}`;
+  if (malas.length === total) return `No se subió ninguna de ${total}: ${malas[0].motivo}`;
+  const primeros = malas.slice(0, 3).map((m) => `«${m.titulo}»`).join(", ");
+  const mas = malas.length > 3 ? ` y ${malas.length - 3} más` : "";
+  return `No se pudieron subir ${malas.length} de ${total} (${primeros}${mas}): ${malas[0].motivo}`;
+}
+
+/**
+ * Sube un lote de tareas (upsert por id). Devuelve cuántas quedaron sin subir y
+ * el motivo, o ceros si fue bien.
  *
  * Antes esto solo llevaba el error a la consola. Un `upsert` que falla porque
  * una columna no existe se come EL LOTE ENTERO: la tarea se queda solo en el
- * móvil y no hay forma de que nadie se entere. El motivo que devuelve Supabase
- * es lo único que explica por qué, así que se devuelve en vez de enterrarlo.
+ * móvil y no hay forma de que nadie se entere.
+ *
+ * Y "se come el lote entero" es el problema, no la explicación. Postgres es
+ * transaccional por petición, así que UNA fila inválida tumba todas las demás
+ * sin decir cuál: trece tareas perfectamente buenas se quedan en el móvil por culpa de
+ * una, y el indicador solo puede decir «14 sin subir». Cuando eso pasó, el
+ * reintento a mano subió las 14 sin tocar ninguna — porque el lote ya estaba
+ * limpio —, y el motivo se perdió para siempre.
+ *
+ * Por eso, si el lote se cae, se reintenta fila por fila. Solo se paga el coste
+ * cuando algo ya ha fallado, y a cambio el fallo se explica solo: el indicador
+ * puede nombrar la tarea culpable y el mensaje literal del servidor.
  */
-export async function autoPushTasks(tasks: Task[]): Promise<string | null> {
-  if (tasks.length === 0) return null;
+export async function autoPushTasks(tasks: Task[]): Promise<ResultadoSubida> {
+  if (tasks.length === 0) return SUBIDA_BIEN;
   const userId = await sessionUserId();
-  if (!userId) return null;
-  const { error } = await supabase
-    .from("tasks")
-    .upsert(tasks.map((t) => ({ ...toRemote(t as unknown as Record<string, unknown>), user_id: userId })));
-  if (error) console.error("AutoSync error (tasks bulk):", error);
-  return error?.message ?? null;
+  if (!userId) return SUBIDA_BIEN;
+
+  const filas = tasks.map((t) => ({ ...toRemote(t as unknown as Record<string, unknown>), user_id: userId }));
+  const { error } = await supabase.from("tasks").upsert(filas);
+  if (!error) return SUBIDA_BIEN;
+
+  console.error("AutoSync: el lote de tareas se ha caido, se va fila por fila", error);
+  const malas: { titulo: string; motivo: string }[] = [];
+  for (const cruda of filas) {
+    const fila = cruda as Record<string, unknown>;
+    const uno = await supabase.from("tasks").upsert([fila]);
+    if (uno.error) {
+      malas.push({ titulo: String(fila.title ?? fila.id), motivo: uno.error.message });
+    }
+  }
+
+  // El lote falló pero todas las filas por separado fueron bien: el problema era
+  // el lote (tamaño, un id repetido, lo que sea), no ninguna fila. No se inventa
+  // un culpable.
+  if (malas.length === 0) return SUBIDA_BIEN;
+
+  console.error(`AutoSync error (tasks): ${malas.length} fila(s) no se pudieron subir`, malas);
+  return { fallos: malas.length, mensaje: describirFallo(malas, filas.length) };
 }
 
 /** Sube un lote de proyectos (upsert por id). Silencioso si no hay sesión. */
@@ -216,13 +270,13 @@ async function pushLocalChanges(): Promise<{ tasks: number; projects: number }> 
   const tasksToPush = localTasks.filter((t) => needsPush(t, remoteTaskTime.get(t.id) ?? 0, remoteTaskTime.has(t.id)));
   const projectsToPush = localProjects.filter((p) => needsPush(p, remoteProjectTime.get(p.id) ?? 0, remoteProjectTime.has(p.id)));
 
-  const [falloTasks] = await Promise.all([autoPushTasks(tasksToPush), autoPushProjects(projectsToPush)]);
-  // Aquí SÍ se sabe cuántas filas estaban solo en el móvil: se acaba de leer la
-  // nube y se ha comparado con `needsPush`. Si el push fue bien, ya no hay
-  // ninguna. Es el único punto donde esa cifra es verdad y no una suposición.
-  useStore
-    .getState()
-    .setPendingUpload(falloTasks === null ? 0 : tasksToPush.length, falloTasks);
+  const [subidaTasks] = await Promise.all([autoPushTasks(tasksToPush), autoPushProjects(projectsToPush)]);
+  // Aquí SÍ se sabe cuántas filas hay en el móvil y no en la nube: se acaba de
+  // leer la nube, se ha comparado con `needsPush` y se ha subido una por una las
+  // que no fueron. Y se cuenta las que de verdad fallaron, no las que iban en el
+  // lote: decir «14 sin subir» cuando trece ya están en la nube es la misma
+  // mentira que no se inventaba una cifra, solo que al revés.
+  useStore.getState().setPendingUpload(subidaTasks.fallos, subidaTasks.mensaje);
   return { tasks: tasksToPush.length, projects: projectsToPush.length };
 }
 
