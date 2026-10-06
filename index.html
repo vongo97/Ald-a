@@ -6,6 +6,13 @@
     <meta name="theme-color" content="#1a1614" />
     <meta name="description" content="Gestor de tareas inteligente con captura en lenguaje natural, capacidad de día y time-blocking" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjIwIiBmaWxsPSIjMGYxNzJhIi8+PHBhdGggZD0iTTI1IDUwIEw0MCA2NSBMNzUgMzAiIHN0cm9rZT0iIzM4YmRmOCIgc3Ryb2tlLXdpZHRoPSI4IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=" />
+    <!-- iPhone: esta etiqueta, y NO el manifest. Safari no lee el manifest para
+         el icono de la pantalla de inicio; sin esto hace una captura de
+         pantalla de la página, que es lo que pasaba. La genera `npm run iconos`
+         desde public/icon.svg, y es un PNG cuadrado a sangre porque iOS aplica
+         su propio redondeo: si el fichero trajera esquinas ya redondeadas se
+         verían «orejas». -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Mis Tareas</title>
     <!-- Fraunces: serif cálida y editorial (inspiración Anthropic) para títulos.
          Se carga con display=swap para no bloquear el primer paint. -->
