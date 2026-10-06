@@ -1,0 +1,71 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ald-a">
+  <!--
+    Icono de la app. Origen de los PNG: `npm run iconos` los genera con resvg.
+
+    Seis colores, y cinco son valores que ya estaban en el proyecto tal cual.
+    Solo uno es nuevo, y se explica más abajo:
+
+      #1a1512  fondo, el negro cálido de Warm Tech        (de index.css)
+      #c1502e  la A y el check: accent-2 de Warm Tech      (de index.css)
+      #d9a441  dorado: accent de Warm Tech                 (de index.css)
+      #8a93b8  anillo claro: text-2 de Cronodisco          (de index.css)
+      #f2c14e  el dorado del sol                           (de tu logo)
+      #5a6480  anillo oscuro                              (nuevo, ver abajo)
+
+    LO QUE CAMBIA respecto al logo original, y por qué. Está todo medido, no
+   es de gusto:
+
+    El fondo era crema (#f4efe4, el swatch de Craft) y pasa a negro cálido. Sobre
+    crema, el dorado del sol se quedaba en 1,46:1 y el naranja del degradado en
+    2,33:1 — los dos por debajo del 3:1 que un gráfico necesita. Es decir, el
+    sol no se veía. Sobre negro todo brilla: el sol llega a 10,79:1. Y el negro es
+    el tema por defecto de la app.
+
+    El anillo era #3a506b→#5b7a9e y llevaba `opacity="0.85"`. Sobre fondo
+    oscuro, #3a4260 (el borde de Cronodisco) queda en 1,83:1: invisible. El
+    extremo oscuro se sube a #5a6480, que ya pasa, y se quita la opacidad, que
+    solo lo hundía más mezclándolo con el fondo.
+
+    Ojo con este fichero: es XML, y dentro de un comentario están prohibidas las
+    rayas dobles. Escribir el nombre de una variable de CSS tal cual, con sus
+    dos guiones delante, hace que resvg rechace el SVG entero y no genere nada.
+
+    EL FONDO NO LLEVA ESQUINAS REDONDEADAS, a propósito. Este SVG alimenta el
+    `apple-touch-icon`, y iOS aplica su propio redondeo: si el PNG ya trajera
+    esquinas redondeadas y transparencia, en la pantalla de inicio se verían
+    «orejas» — el recorte del sistema por encima del recorte propio. Cuadrado
+    lleno y opaco, que es lo que iOS y Android piden los dos.
+
+    El sol se queda en (424, 180), donde estaba. Está fuera de la zona segura de
+    Android (184 + 26 = 210 > 204,8), pero eso no se arregla moviéndolo: el
+    fichero `maskable` es una variante aparte con la silueta escalada al 95%, que
+    es justo para eso. Mover el sol aquí habría roto el diseño en iPhone, donde
+    sí se ve entero.
+  -->
+  <defs>
+    <linearGradient id="gradA" x1="0" y1="512" x2="512" y2="0">
+      <stop offset="0" stop-color="#c1502e"/>
+      <stop offset="1" stop-color="#d9a441"/>
+    </linearGradient>
+    <radialGradient id="sol" cx="0.5" cy="0.4" r="0.8">
+      <stop offset="0" stop-color="#f2c14e"/>
+      <stop offset="1" stop-color="#d9a441"/>
+    </radialGradient>
+    <linearGradient id="gradC" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5a6480"/>
+      <stop offset="1" stop-color="#8a93b8"/>
+    </linearGradient>
+  </defs>
+
+  <rect id="fondo" width="512" height="512" fill="#1a1512"/>
+
+  <ellipse cx="256" cy="260" rx="196" ry="150" fill="none" stroke="url(#gradC)"
+           stroke-width="14" transform="rotate(-16 256 260)"/>
+  <circle cx="424" cy="180" r="26" fill="url(#sol)"/>
+
+  <path d="M152 372 L256 160 L360 372" fill="none" stroke="url(#gradA)" stroke-width="48"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M196 302 L262 302" stroke="url(#gradA)" stroke-width="48" stroke-linecap="round"/>
+  <path d="M262 302 L304 344 L378 250" fill="none" stroke="#c1502e" stroke-width="42"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
