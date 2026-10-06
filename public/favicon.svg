@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ald-a">
+  <!--
+    Favicon: el icono de la PESTAÑA, el del marcador y el de la barra del
+    navegador. Esto NO es lo mismo que public/icon.svg, y por eso son dos
+    ficheros.
+
+    El error anterior era tratar el favicon como si fuera el icono de la app.
+    Son dos consumidores distintos con la misma Pegatina:
+
+      public/icon.svg     512px, se ve en la pantalla de inicio del movil y al
+                          instalar. Ahi caben el anillo, el check y todo el
+                          detalle.
+
+      este fichero        16-32px, se ve en una pestana de 20px de alto. A ese
+                          tamano el logo entero es un boron: medido, a 16px solo
+                          quedan 92 de 256 pixeles con dibujo, el trazo del
+                          anillo desaparece y las patas de la A se rellenan.
+
+    Asi que aqui se queda solo lo que sobrevive al encogimiento: la A con su
+    degradado y el sol. Ni anillo ni check.
+
+    El trazo de la A es de 64, mas grueso que los 48 del icono grande. Es la
+    misma razon: a 16px, 64 sobre 512 son 2px de pata; con 48 serian 1,5 y la
+    A se cerraba al encoger.
+
+    Pero grueso tampoco es bueno. La primera version llevaba 72, y al mirarla
+    a tamano real resultaba que NO se leia como una A: el travesano se comia el
+    hueco del medio y el dibujo era un triangulo macizo. Por eso el travesano
+    va a 296 y es mas fino (46) que las patas (64), y va ancho, de 180 a 312,
+    para que agarre las dos patas y deje abierto el ojo de la letra. Ese hueco
+    es lo que hace que se lea como A y no como flecha.
+
+    El fondo SI lleva esquinas redondeadas, al contrario que el icono grande.
+    Aqui no hay ningun sistema que aplique su propia mascara, asi que el
+    redondeo hay que traerselo. (El icono grande va a proposito sin redondear:
+    ahi lo ponen iOS y Android.)
+
+    Colores: los mismos cuatro exactos de index.css que el icono grande.
+
+      #1a1512  fondo, el negro calido de Warm Tech
+      #c1502e  la A en su extremo terracota (accent-2 de Warm Tech)
+      #d9a441  la A en su extremo dorado (accent de Warm Tech)
+      #f2c14e  el sol, el dorado de tu logo
+
+    Ojo con las rayas dobles en los comentarios: esto es XML y estan prohibidas.
+  -->
+  <defs>
+    <linearGradient id="a" x1="0" y1="512" x2="512" y2="0">
+      <stop offset="0" stop-color="#c1502e"/>
+      <stop offset="1" stop-color="#d9a441"/>
+    </linearGradient>
+    <radialGradient id="sol" cx="0.5" cy="0.4" r="0.8">
+      <stop offset="0" stop-color="#f2c14e"/>
+      <stop offset="1" stop-color="#d9a441"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="96" fill="#1a1512"/>
+
+  <circle cx="416" cy="184" r="30" fill="url(#sol)"/>
+
+  <path d="M150 378 L256 152 L362 378" fill="none" stroke="url(#a)" stroke-width="64"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M180 296 L312 296" stroke="url(#a)" stroke-width="46" stroke-linecap="round"/>
+</svg>

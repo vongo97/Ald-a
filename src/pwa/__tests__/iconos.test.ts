@@ -97,6 +97,115 @@ describe("iOS tiene su propia etiqueta, y no la busca en el manifest", () => {
   });
 });
 
+describe("el favicon de la pestaña es otro dibujo, y a propósito", () => {
+  const favicon = leer("public/favicon.svg");
+  const pintado = favicon.replace(/<!--[\s\S]*?-->/g, "");
+
+  it("el HTML lo declara y ya no hay el base64 de la plantilla de Vite", () => {
+    // El base64 anterior dibujaba un check azul de Vite: era el icono de la
+    // pestaña de todo el mundo. Por eso, aun con el icono de la app puesto,
+    // en la pestaña seguia viendo el dibujo equivocado.
+    expect(html).not.toMatch(/rel="icon"[^>]*base64,/);
+    expect(html).toMatch(/<link[^>]+rel="icon"[^>]+href="\/favicon\.svg"/);
+  });
+
+  it("los tres ficheros existen y el PNG mide lo que la etiqueta declara", () => {
+    const fallos: string[] = [];
+    // Se parsea la etiqueta ENTERA, no solo el href. La version anterior
+    // buscaba el tamano esperado en la ruta del fichero, y las rutas son
+    // /favicon-16.png, no /16x16.png: asi que el tamano no se comprobaba
+    // NUNCA y un PNG de 200 bytes pasaba el filtro como si fuera un icono.
+    const etiquetas = [...html.matchAll(/<link[^>]+rel="icon"[^>]*>/g)].map((m) => m[0]);
+    expect(etiquetas.length).toBeGreaterThanOrEqual(3);
+    expect(etiquetas.some((t) => t.includes('href="/favicon.svg"'))).toBe(true);
+
+    for (const etiqueta of etiquetas) {
+      const src = etiqueta.match(/href="(\/[^"]+)"/)?.[1];
+      if (!src) {
+        fallos.push(`una etiqueta rel="icon" no tiene href: ${etiqueta}`);
+        continue;
+      }
+      const ruta = fileURLToPath(new URL(String(src).slice(1), new URL("public/", raiz)));
+      if (!existsSync(ruta)) {
+        fallos.push(`${src} no existe`);
+        continue;
+      }
+      const bytes = readFileSync(ruta);
+      if (!src.endsWith(".png")) {
+        if (bytes.length < 500) fallos.push(`${src} pesa ${bytes.length} bytes: parece vacío`);
+        continue;
+      }
+      const declarado = etiqueta.match(/sizes="(\d+)x(\d+)"/);
+      if (!declarado) {
+        fallos.push(`${src} es un PNG pero su etiqueta no declara sizes`);
+        continue;
+      }
+      const { ancho, alto } = dimensiones(bytes);
+      if (ancho !== Number(declarado[1]) || alto !== Number(declarado[2])) {
+        fallos.push(`${src} declara ${declarado[1]}x${declarado[2]} y mide ${ancho}x${alto}`);
+      }
+      // Un PNG de 16x16 que sea de un solo color pesa alrededor de 70 bytes; el
+      // de verdad, 438. El umbral va holgado para no ser fragil, pero por
+      // debajo de 150 es un plano y el dibujo no se ha rasterizado.
+      if (bytes.length < 150) fallos.push(`${src} pesa ${bytes.length} bytes: parece un color plano`);
+    }
+    expect(fallos).toEqual([]);
+  });
+
+  it("no es el logo entero: el anillo y el check se quitaron a proposito", () => {
+    // Este es el guard que mas importa. El logo entero MEDIDO a 16px deja 44
+    // pixeles de 256 sueltos: se ve como un chisporroteo, no como una A. Si
+    // alguien "simplifica" el favicon poniendo aqui el icono grande, esto
+    // salta. Los tres elementos que se descartaron son los que no sobreviven
+    // al encogimiento.
+    expect(pintado).not.toContain("url(#gradC)");   // el anillo
+    expect(pintado).not.toContain('stroke="#c1502e"'); // el check
+    expect((pintado.match(/<path/g) ?? []).length).toBe(2); // las dos de la A
+  });
+
+  it("el ojo de la A sigue abierto, que es lo que hace que se lea como letra", () => {
+    // Con el trazo a 72 el travesano se comia el hueco del medio y la A
+    // parecia un triangulo macizo. Esto no mide el dibujo: comprueba que el
+    // travesano es mas fino que las patas y que va ancho, que es lo que
+    // mantiene abierto el ojo entre las dos.
+    const patas = Number(favicon.match(/M150 378[\s\S]*?stroke-width="(\d+)"/)?.[1]);
+    const travesano = Number(favicon.match(/M180 296[\s\S]*?stroke-width="(\d+)"/)?.[1]);
+    expect(patas).toBeGreaterThan(0);
+    expect(travesano).toBeGreaterThan(0);
+    expect(travesano).toBeLessThan(patas);
+    // Y lo bastante ancho para alcanzar las dos patas: si no, son dos rayas
+    // sueltas y no una letra.
+    expect(favicon).toMatch(/M1\d\d 296 L3\d\d 296/);
+  });
+
+  it("los colores son los mismos que los del icono grande", () => {
+    const mio = leer("public/icon.svg").replace(/<!--[\s\S]*?-->/g, "");
+    for (const c of ["#1a1512", "#c1502e", "#d9a441", "#f2c14e"]) {
+      expect(pintado, `falta ${c} en el favicon`).toContain(c);
+      expect(mio, `${c} no esta en el icono grande`).toContain(c);
+    }
+  });
+
+  it("este lleva esquinas redondeadas y el icono grande no, a proposito", () => {
+    // Aqui no hay ningun sistema que aplique su propia mascara, asi que el
+    // redondeo se trae. En el icono grande ocurre lo contrario: iOS y Android
+    // lo ponen, y si el PNG trajera ya las esquinas redondeadas con
+    // transparencia se verian orejas.
+    expect(pintado).toMatch(/<rect[^>]*rx="\d+"/);
+    const grande = leer("public/icon.svg").replace(/<!--[\s\S]*?-->/g, "");
+    expect(grande).not.toMatch(/<rect[^>]*id="fondo"[^>]*rx=/);
+  });
+
+  it("no hay rayas dobles en los comentarios", () => {
+    // Esto es XML y las rayas dobles estan prohibidas en un comentario. Ya
+    // costo una vez, cuando se escribio el nombre de una variable de CSS tal
+    // cual y resvg rechazo el SVG entero.
+    for (const c of favicon.match(/<!--[\s\S]*?-->/g) ?? []) {
+      expect(c.slice(4, -3), "doble raya dentro de un comentario").not.toContain("--");
+    }
+  });
+});
+
 describe("el origen del icono se puede editar", () => {
   const svg = leer("public/icon.svg");
 

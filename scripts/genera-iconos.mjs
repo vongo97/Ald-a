@@ -99,14 +99,25 @@ function pngDe(svg, lado) {
 const svg = readFileSync(join(publicDir, "icon.svg"), "utf8");
 const maskable = comoMaskable(svg);
 
+// El favicon es OTRO dibujo, no el mismo encogido: vive a 16-32px y el logo
+// entero ahi no se lee. Sale de public/favicon.svg, que es una version
+// simplificada a proposito.
+const favicon = readFileSync(join(publicDir, "favicon.svg"), "utf8");
+
 const salidas = [
   ["icon-192.png", pngDe(svg, 192)],
   ["icon-512.png", pngDe(svg, 512)],
   ["icon-maskable-512.png", pngDe(maskable, 512)],
   ["apple-touch-icon.png", pngDe(svg, 180)],
+  // Los PNG del favicon no son un adorno: Safari no aplica el SVG de un
+  // `<link rel="icon">` en la pestaña de forma fiable, asi que hace falta un
+  // respaldo en PNG para que la pestana no se quede con el icono que hubiera
+  // cacheado.
+  ["favicon-32.png", pngDe(favicon, 32)],
+  ["favicon-16.png", pngDe(favicon, 16)],
 ];
 
-console.log(`Generados ${salidas.length} PNG desde public/icon.svg:`);
+console.log(`Generados ${salidas.length} PNG desde public/icon.svg y public/favicon.svg:`);
 for (const [nombre, png] of salidas) {
   writeFileSync(join(publicDir, nombre), png);
   console.log(`  ${nombre.padEnd(24)} ${String(dimensiones(png).ancho).padStart(4)}px  ${(png.length / 1024).toFixed(1)} kB`);
